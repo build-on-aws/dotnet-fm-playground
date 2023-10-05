@@ -1,10 +1,26 @@
 # .NET FM Playground
 
 .NET FM Playground is a .NET MAUI Blazor sample application showcasing 
-how to leverage Amazon Bedrock from C# code. Amazon Bedrock is a fully managed 
+how to leverage Amazon Bedrock from C# code. As any sample application, it is not production-ready.
+It is provided for the sole purpose of illustrating of .NET and C# developers can leverage Amazon Bedrock
+to build generative AI enabled applications.
+
+Amazon Bedrock is a fully managed 
 service that offers a choice of high-performing foundation models (FMs) 
 from leading AI companies like AI21 Labs, Anthropic, Cohere, Meta, Stability AI, 
 and Amazon via a single API.
+
+In order to let you test and interact with the different foundation models, the .NET FM Playground offers you four playgrounds:
+* A text playground
+* A chat playground
+* A voice chat playground
+* An image playground
+
+In addition, it also lists and displays the foundation models you have access to and their characteristics.
+
+![Screenshot of the chat playground](/doc/img/ChatPlayground.png "Screenshot of the chat playground")
+
+![Screenshot of the image playground](/doc/img/ImagePlayground.png "Screenshot of the image playground")
 
 ## Dev Environment Prerequisite
 
@@ -48,7 +64,15 @@ can add access to specific models using the model access page.
 To learn more about managing model access, read the following documentation:
 * https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html 
  
+## Repository Structure
 
+The repository has the following structure
+* **src:** contains the solution
+	* **DonetFMPlayground.Core:** contains a library adding method extensions to the 
+	AmazonBedrockRuntimeClient object from the AWS SDK for .NET
+	* **DotnetFMPlayground.App:** contains the .NET MAUI Blazor application
+* **doc:** contains documentation
+	* **img:** contains screenshots and images
 
 
 ## Security
