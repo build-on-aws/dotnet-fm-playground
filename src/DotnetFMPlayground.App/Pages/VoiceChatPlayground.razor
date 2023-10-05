@@ -30,7 +30,7 @@
         <MudTimeline Reverse=true>
             @foreach (var item in PromptItems)
             {
-                string label = item.Type == PromptItemType.User ? "User" : "Jarvis";
+                string label = item.Type == PromptItemType.User ? "User" : "Assistant";
                 <MudTimelineItem>
                     <MudField Label="@label" Class="white-space-pre-line">@item.Prompt</MudField>
                 </MudTimelineItem>
