@@ -1,0 +1,88 @@
+﻿@page "/image-playground"
+@using Amazon.Bedrock.Model;
+@using System.Text;
+@using Amazon.Bedrock;
+@using Amazon.BedrockRuntime;
+@using DotnetFMPlayground.Core.Models;
+@inject AmazonBedrockRuntimeClient BedrockRuntimeClient
+@inject AmazonBedrockClient BedrockClient
+@inject IJSRuntime JS
+
+<MudText Typo="Typo.h3">Image Playground</MudText>
+<MudStack>
+<MudCard>
+    <MudCardContent>
+        <MudSelect T="FoundationModelSummary" @bind-Value="selectedModel" ToStringFunc="@selectConverter" Required="true">
+            @if (foundationModels != null)
+            {
+                foreach (var item in foundationModels)
+                {
+                    selectedModel ??= item;
+                    <MudSelectItem Value="@item"/>
+                }
+            }
+        </MudSelect>
+    </MudCardContent>
+</MudCard>
+<EditForm Model="@userPrompt" OnSubmit="OnSubmit">
+    <MudCard>
+        <MudCardContent>
+            <MudTextField Counter=0 id="PromptId" Label="Prompt" @bind-Value="userPrompt.Prompt" Lines=5 Variant="Variant.Outlined" />
+        </MudCardContent>
+        <MudCardActions>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="ml-auto">Submit</MudButton>
+        </MudCardActions>
+    </MudCard>
+</EditForm>
+@if (imageSrc != String.Empty)
+{
+    <MudPaper id="ImageId" Class="d-flex justify-center">
+        <MudImage Class="pa-4" Src="@imageSrc"></MudImage>
+    </MudPaper>
+}
+</MudStack>
+
+@code {
+    public class UserPrompt
+    {
+        public string Prompt { get; set; }
+    }
+
+    private IEnumerable<FoundationModelSummary> foundationModels;
+
+    private FoundationModelSummary selectedModel;
+
+    private UserPrompt userPrompt = new UserPrompt();
+
+    Func<FoundationModelSummary, string> selectConverter = fms => fms == null ? "" : String.Concat(fms?.ModelName, " (", fms?.ModelId, ")");
+
+    private string imageSrc = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+
+        foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("IMAGE"));
+        selectedModel = foundationModels.FirstOrDefault();
+        await base.OnInitializedAsync();
+        StateHasChanged();
+    }
+
+    private async Task OnSubmit(EditContext context)
+    {
+
+        Prompt prompt = new();
+        prompt.Add(new PromptItem(PromptItemType.User, userPrompt.Prompt));
+
+        var response = await BedrockRuntimeClient.InvokeModelAsync(
+            selectedModel.ModelId,
+            prompt,
+            new()
+            {
+            }
+        );
+
+        imageSrc = $"data:image/jpeg;base64,{(object)response.GetResponse()}";
+        StateHasChanged();
+        await JS.InvokeVoidAsync("scrollToElement", "ImageId");
+    }
+}

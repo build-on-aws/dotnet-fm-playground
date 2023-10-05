@@ -1,0 +1,120 @@
+﻿@page "/chat-playground"
+@using Amazon.Bedrock.Model;
+@using Amazon.Bedrock;
+@using Amazon.BedrockRuntime;
+@using System.Text;
+@using DotnetFMPlayground.Core.Models;
+@inject AmazonBedrockRuntimeClient BedrockRuntimeClient
+@inject AmazonBedrockClient BedrockClient
+@inject IJSRuntime JS
+
+<MudText Typo="Typo.h3">Chat Playground</MudText>
+<MudStack>
+    <MudCard>
+        <MudCardContent>
+            <MudSelect T="FoundationModelSummary" @bind-Value="selectedModel" ToStringFunc="@selectConverter" Required="true">
+                @if (foundationModels != null)
+                {
+                    foreach (var item in foundationModels)
+                    {
+                        selectedModel ??= item;
+                        <MudSelectItem Value="@item" />
+                    }
+                }
+            </MudSelect>
+        </MudCardContent>
+    </MudCard>
+<MudCard>
+    <MudCardContent>
+        <MudTimeline Reverse=true>
+        @foreach (var item in promptItems)
+        {
+            string label = item.Type == PromptItemType.User ? "Human" : "Assistant";
+            <MudTimelineItem>
+                <MudField Label="@label" Class="white-space-pre-line">@item.Prompt</MudField>
+            </MudTimelineItem>
+        }
+        <MudTimelineItem>
+        <MudTextField id="PromptId" @ref="promptField" T="string" ValueChanged="@OnPromptChanged" Label="Human"></MudTextField>
+        </MudTimelineItem>
+    </MudTimeline>
+    </MudCardContent>
+    <MudCardActions>
+            <MudButton Class="ml-auto" Disabled="@isThinking" Variant="Variant.Filled" Color="Color.Primary" OnClick="Reset">
+            @if (isThinking)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Thinking...</MudText>
+                }
+                else
+                {
+                    <MudIcon Class="ms-n1" Icon="@Icons.Material.Filled.Replay" Size="Size.Small"></MudIcon>
+                    <MudText Class="ms-2">Reset</MudText>
+                }
+        </MudButton>
+    </MudCardActions>
+</MudCard>
+</MudStack>
+
+
+@code {
+    private MudTextField<string> promptField; 
+
+    private ICollection<PromptItem> promptItems = new List<PromptItem>();
+
+    private IEnumerable<FoundationModelSummary> foundationModels;
+
+    private FoundationModelSummary selectedModel;
+
+    private bool isThinking = false;
+
+    Func<FoundationModelSummary, string> selectConverter = fms => fms == null ? "" : String.Concat(fms?.ModelName, " (", fms?.ModelId, ")");
+
+    protected override async Task OnInitializedAsync()
+    {
+
+        foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("TEXT"));
+        selectedModel = foundationModels.FirstOrDefault(x => x.ModelId == "anthropic.claude-v2");
+        await base.OnInitializedAsync();
+        StateHasChanged();
+    }
+
+    private async Task Reset(MouseEventArgs e)
+    {
+        await promptField.SetText("");
+        promptItems.Clear();
+    }
+
+    private async Task OnPromptChanged(string inputValue)
+    {
+        if (string.IsNullOrEmpty(inputValue))
+            return;
+
+        isThinking = true;
+
+        Prompt prompt = new();
+        prompt.AddRange(promptItems);
+        // at this point, you don't want to add newUserPrompt to the PromptItems collection because it would update the display while we don't have yet 
+        // the assistant answer
+        PromptItem newUserPrompt = new(PromptItemType.User, inputValue);
+        prompt.Add(newUserPrompt); 
+
+        var response = await BedrockRuntimeClient.InvokeModelAsync(
+            selectedModel.ModelId,
+            prompt,
+            new()
+            {
+                { "max_tokens_to_sample", 300 }
+            }
+        );
+
+        // now we can clear the PromptField and add the user prompt and the AI answer to the PromptItems collection to refresh the UI
+        await promptField.Clear();
+        promptItems.Add(newUserPrompt);
+        promptItems.Add(new PromptItem(PromptItemType.FMAnswer, response.GetResponse()));
+        isThinking = false;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("scrollToElement", "PromptId");
+
+    }
+}
