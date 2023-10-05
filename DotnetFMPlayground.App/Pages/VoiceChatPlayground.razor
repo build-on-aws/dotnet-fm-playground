@@ -1,0 +1,149 @@
+﻿@page "/voicechat-playground"
+@using Amazon.Bedrock.Model;
+@using DotnetFMPlayground.Core.Models;
+@using Amazon.Bedrock;
+@using Amazon.BedrockRuntime;
+@inject AmazonBedrockRuntimeClient BedrockRuntimeClient
+@inject AmazonBedrockClient BedrockClient
+@inject IJSRuntime JS
+@inject ISpeechRecognitionService recognitionService
+@inject ISpeechSynthesisService synthesisService
+
+<MudText Typo="Typo.h3">Voice Chat Playground</MudText>
+<MudStack>
+    <MudCard>
+        <MudCardContent>
+            <MudSelect T="FoundationModelSummary" @bind-Value="SelectedModel" ToStringFunc="@selectConverter" Required="true">
+                @if (FoundationModels != null)
+                {
+                    foreach (var item in FoundationModels)
+                    {
+                        SelectedModel ??= item;
+                        <MudSelectItem Value="@item" />
+                    }
+                }
+            </MudSelect>
+        </MudCardContent>
+    </MudCard>
+<MudCard>
+    <MudCardContent>
+        <MudTimeline Reverse=true>
+            @foreach (var item in PromptItems)
+            {
+                string label = item.Type == PromptItemType.User ? "User" : "Jarvis";
+                <MudTimelineItem>
+                    <MudField Label="@label" Class="white-space-pre-line">@item.Prompt</MudField>
+                </MudTimelineItem>
+            }
+            <MudTimelineItem>
+                <MudTextField id="PromptId" @ref="PromptField" T="string" ValueChanged="@OnPromptChanged" Label="User"></MudTextField>
+            </MudTimelineItem>
+        </MudTimeline>
+    </MudCardContent>
+    <MudCardActions>
+        <MudButton Class="ml-auto" Disabled="@isListening" Variant="Variant.Filled" Color="Color.Primary" OnClick="StartSpeechRecognition">
+            @if(isListening)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Listening</MudText>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Mic" Size="Size.Small"></MudIcon>
+                <MudText>Talk</MudText>
+            }
+        </MudButton>
+    </MudCardActions>
+</MudCard>
+</MudStack>
+
+
+@code {
+    private System.Timers.Timer _timer = new System.Timers.Timer(100);
+
+    private bool isListening = false;
+
+    private MudTextField<string> PromptField; 
+
+    private ICollection<PromptItem> PromptItems = new List<PromptItem>();
+
+    private IEnumerable<FoundationModelSummary> FoundationModels;
+
+    private FoundationModelSummary SelectedModel;
+
+    Func<FoundationModelSummary, string> selectConverter = fms => fms == null ? "" : String.Concat(fms?.ModelName, " (", fms?.ModelId, ")");
+
+    protected override async Task OnInitializedAsync()
+    {
+
+        FoundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("TEXT"));
+        SelectedModel = FoundationModels.FirstOrDefault(x => x.ModelId == "anthropic.claude-v2");
+        _timer.Elapsed += OnElapsed;
+        await base.OnInitializedAsync();
+        StateHasChanged();
+    }
+
+    private async void OnElapsed(object sender, System.Timers.ElapsedEventArgs e)
+    {
+        if (!synthesisService.Speaking.Result)
+        {
+            _timer.Stop();
+            isListening = true;
+            IDisposable recognitionServiceDisposable = await recognitionService.RecognizeSpeechAsync("en-us", OnRecognized);
+            await this.InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task StartSpeechRecognition(MouseEventArgs e)
+    {
+        isListening = true;
+        IDisposable recognitionServiceDisposable = await recognitionService.RecognizeSpeechAsync("en-us", OnRecognized);
+    }
+
+    private async Task OnRecognized(string e)
+    {
+        await recognitionService.CancelSpeechRecognitionAsync(true);
+        await PromptField.SetText(e);
+    }
+
+    private async Task OnPromptChanged(string inputValue)
+    {
+        if (string.IsNullOrEmpty(inputValue))
+            return;
+
+        Prompt prompt = new();
+        prompt.AddRange(PromptItems);
+        // at this point, you don't want to add newUserPrompt to the PromptItems collection because it would update the display while we don't have yet
+        // the assistant answer
+        PromptItem newUserPrompt = new(PromptItemType.User, inputValue);
+        prompt.Add(newUserPrompt);
+
+        var response = await BedrockRuntimeClient.InvokeModelAsync(
+            SelectedModel.ModelId,
+            prompt,
+            new()
+            {
+                { "max_tokens_to_sample", 300 }
+            }
+        );
+
+        string outputText = response.GetResponse();
+
+        var utterance = new SpeechSynthesisUtterance
+        {
+            Lang = "en-us",
+            Text = outputText
+        };
+
+        await synthesisService.SpeakAsync(utterance);
+        isListening = false;
+        _timer.Start();
+
+        // now we can clear the PromptField and add the user prompt and the AI answer to the PromptItems collection to refresh the UI
+        await PromptField.Clear();
+        PromptItems.Add(newUserPrompt);
+        PromptItems.Add(new PromptItem(PromptItemType.FMAnswer, outputText));
+        StateHasChanged();
+        await JS.InvokeVoidAsync("scrollToElement", "PromptId");
+    }
+}

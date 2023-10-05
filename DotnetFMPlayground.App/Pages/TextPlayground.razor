@@ -1,0 +1,125 @@
+﻿@page "/text-playground"
+@using System.Text;
+@using Amazon.BedrockRuntime;
+@using Amazon.Bedrock;
+@using Amazon.Bedrock.Model;
+@using DotnetFMPlayground.Core.Models;
+@using System.Text.Json;
+@inject AmazonBedrockRuntimeClient BedrockRuntimeClient
+@inject AmazonBedrockClient BedrockClient
+@inject IJSRuntime JS
+
+<MudText Typo="Typo.h3">Text Playground</MudText>
+<MudStack>
+    <MudCard>
+        <MudCardContent>
+            <MudSelect T="FoundationModelSummary" @bind-Value="selectedModel" ToStringFunc="@selectConverter" Required="true">
+                @if (foundationModels != null)
+                {
+                    foreach (var item in foundationModels)
+                    {
+                        selectedModel ??= item;
+                        <MudSelectItem Value="@item" />
+                    }
+                }
+            </MudSelect>
+        </MudCardContent>
+    </MudCard>
+    <EditForm Model="@userPrompt" OnSubmit="OnSubmit">
+        <MudCard>
+            <MudCardContent>
+                <MudTextField Counter=0 id="PromptId" Label="Prompt" @bind-Value="userPrompt.Prompt" Lines=5 Variant="Variant.Outlined" />
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="ml-auto">Submit</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </EditForm>
+    <MudCard>
+        <MudCardContent>
+            <MudField Id="ResponseField" Label="Response" Class="white-space-pre-line">@outputText</MudField>
+        </MudCardContent>
+    </MudCard>
+</MudStack>
+@code {
+
+    public class UserPrompt
+    {
+        public string Prompt { get; set; }
+    }
+
+    private IEnumerable<FoundationModelSummary> foundationModels;
+
+    private FoundationModelSummary selectedModel;
+
+    private UserPrompt userPrompt = new UserPrompt();
+
+    private string outputText;
+
+    Func<FoundationModelSummary, string> selectConverter = fms => fms == null ? "" : String.Concat(fms?.ModelName, " (", fms?.ModelId, ")");
+
+    protected override async Task OnInitializedAsync()
+    {
+
+        foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("TEXT"));
+        selectedModel = foundationModels.FirstOrDefault(x => x.ModelId == "anthropic.claude-v2");
+        await base.OnInitializedAsync();
+        StateHasChanged();
+    }
+
+    private async Task OnSubmit(EditContext context)
+    {
+        Prompt prompt = new();
+        prompt.Add(new PromptItem(PromptItemType.User, userPrompt.Prompt));
+
+        if (!selectedModel.ResponseStreamingSupported)
+        {
+            outputText = "Thinking...";
+            var response = await BedrockRuntimeClient.InvokeModelAsync(
+                selectedModel.ModelId,
+                prompt,
+                new()
+                {
+                    { "max_tokens_to_sample", 300 }
+                }
+            );
+            outputText = response.GetResponse();
+            StateHasChanged();
+        }
+        else
+        {
+            outputText = "";
+            await BedrockRuntimeClient.InvokeModelWithResponseStreamAsync(
+                selectedModel.ModelId,
+                prompt,
+                new()
+                {
+                    { "max_tokens_to_sample", 300 }
+                },
+                ChunkReceived,
+                ExceptionReceived
+            );
+        }
+    }
+
+    private async Task ChunkReceived(string? chunk)
+    {
+        await InvokeAsync(async () =>
+        {
+            outputText += chunk;
+            StateHasChanged();
+            await JS.InvokeVoidAsync("scrollToElement", "ResponseField");
+        });
+    }
+
+    private async Task ExceptionReceived(string? message)
+    {
+        System.Diagnostics.Debug.WriteLine("ExceptionReceived");
+        await InvokeAsync(() =>
+        {
+            outputText += message;
+            StateHasChanged();
+        });
+    }
+}
+
