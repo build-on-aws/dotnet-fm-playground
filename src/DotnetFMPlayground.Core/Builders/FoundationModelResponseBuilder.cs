@@ -36,6 +36,10 @@ namespace DotnetFMPlayground.Core.Builders
                         response = await JsonSerializer.DeserializeAsync<AmazonTitanTextResponse>(stream, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
                     }
                     break;
+                case "cohere.command-text-v14":
+                    string temp = new StreamReader(stream).ReadToEnd();
+                    response = null;
+                    break;
                 default:
                     throw new NotSupportedException($"ModelId {modelId} not supported");
             };

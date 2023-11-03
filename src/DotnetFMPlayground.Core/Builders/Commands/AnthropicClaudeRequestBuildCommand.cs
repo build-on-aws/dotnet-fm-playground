@@ -7,7 +7,7 @@ using System.Text.Json;
 
 namespace DotnetFMPlayground.Core.Builders.Commands
 {
-    internal class ClaudeRequestBuildCommand : InvokeModelRequestBuildCommand
+    internal class AnthropicClaudeRequestBuildCommand : InvokeModelRequestBuildCommand
     {
         internal override InvokeModelRequest Execute(string modelId, Prompt prompt, BaseInferenceParameters inferenceParameters)
         {

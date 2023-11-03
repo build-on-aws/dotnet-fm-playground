@@ -15,12 +15,12 @@ namespace DotnetFMPlayground.Core.Builders
         static InvokeModelRequestBuilder()
         {
 
-            ClaudeRequestBuildCommand claudeRequestBuildCommand = new();
+            AnthropicClaudeRequestBuildCommand claudeRequestBuildCommand = new();
             invokeModelRequestBuilderRegistry.Add("anthropic.claude-instant-v1", claudeRequestBuildCommand);
             invokeModelRequestBuilderRegistry.Add("anthropic.claude-v1", claudeRequestBuildCommand);
             invokeModelRequestBuilderRegistry.Add("anthropic.claude-v2", claudeRequestBuildCommand);
 
-            StableDiffusionRequestBuildCommand stableDiffusionRequestBuildCommand = new();
+            StabilityAIStableDiffusionRequestBuildCommand stableDiffusionRequestBuildCommand = new();
             invokeModelRequestBuilderRegistry.Add("stability.stable-diffusion-xl-v0", stableDiffusionRequestBuildCommand);
             
             AmazonTitanRequestBuildCommand amazonTitanRequestBuildCommand = new();
@@ -29,7 +29,12 @@ namespace DotnetFMPlayground.Core.Builders
             invokeModelRequestBuilderRegistry.Add("amazon.titan-text-agile-v1", amazonTitanRequestBuildCommand);
             invokeModelRequestBuilderRegistry.Add("amazon.titan-embed-text-v1", amazonTitanRequestBuildCommand);
 
+            CohereCommandRequestBuildCommand cohereCommandRequestBuildCommand = new();
+            invokeModelRequestBuilderRegistry.Add("cohere.command-text-v14", cohereCommandRequestBuildCommand);
 
+            AI21LabsJurassic2RequestBuildCommand aI21LabsJurassic2RequestBuildCommand = new();
+            invokeModelRequestBuilderRegistry.Add("ai21.j2-mid-v1", aI21LabsJurassic2RequestBuildCommand);
+            invokeModelRequestBuilderRegistry.Add("ai21.j2-ultra-v1", aI21LabsJurassic2RequestBuildCommand);
         }
 
         internal static InvokeModelRequest Build(
