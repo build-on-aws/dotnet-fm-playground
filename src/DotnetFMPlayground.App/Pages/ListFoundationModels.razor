@@ -3,6 +3,7 @@
 @using Amazon.Bedrock.Model;
 @using System.Text;
 @using Amazon.Bedrock;
+@using DotnetFMPlayground.Core.Models;
 @inject AmazonBedrockClient BedrockClient
 
 <MudDataGrid Items="foundationModels" Filterable="false" SortMode="@SortMode.None" Groupable="false">
@@ -10,10 +11,13 @@
         <PropertyColumn Property="x => x.ProviderName" Title="Provider" />
         <PropertyColumn Property="x => x.ModelName" Title="Model Name" />
         <PropertyColumn Property="x => x.ModelId" Title="Model Id" />
+        <PropertyColumn Property="@(x => ModelIds.IsSupported(x.ModelId))" Title="Supported by the Playgrounds" />
         <PropertyColumn Property="x => x.ResponseStreamingSupported" Title="Streaming Supported" />
+        <PropertyColumn Property="@(x => ModelIds.IsStreamingSupported(x.ModelId))" Title="Streaming Supported by the Playgrounds" />
         <PropertyColumn Property="@(x => x.InputModalities == null ? "" : String.Join(", ", x.InputModalities))" Title="Input Modalities" />
         <PropertyColumn Property="@(x => x.OutputModalities == null ? "" : String.Join(", ", x.OutputModalities))" Title="Output Modalities" />
         <PropertyColumn Property="@(x => x.CustomizationsSupported == null ? "" : String.Join(", ", x.CustomizationsSupported))" Title="Customizations Supported" />
+
     </Columns>
 </MudDataGrid>
 

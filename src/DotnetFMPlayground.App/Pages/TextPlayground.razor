@@ -72,7 +72,7 @@
         Prompt prompt = new();
         prompt.Add(new PromptItem(PromptItemType.User, userPrompt.Prompt));
 
-        if (!selectedModel.ResponseStreamingSupported)
+        if (!(selectedModel.ResponseStreamingSupported && ModelIds.IsStreamingSupported(selectedModel.ModelId)))
         {
             outputText = "Thinking...";
             var response = await BedrockRuntimeClient.InvokeModelAsync(

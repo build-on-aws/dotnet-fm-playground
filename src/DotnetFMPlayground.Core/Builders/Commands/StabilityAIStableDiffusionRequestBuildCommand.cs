@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace DotnetFMPlayground.Core.Builders.Commands
 {
-    internal class StableDiffusionRequestBuildCommand : InvokeModelRequestBuildCommand
+    internal class StabilityAIStableDiffusionRequestBuildCommand : InvokeModelRequestBuildCommand
     {
         internal override InvokeModelRequest Execute(string modelId, Prompt prompt, BaseInferenceParameters inferenceParameters)
         {
