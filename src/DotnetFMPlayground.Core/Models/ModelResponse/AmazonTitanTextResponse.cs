@@ -18,16 +18,16 @@ namespace DotnetFMPlayground.Core.Models.ModelResponse
         }
         public int InputTextTokenCount { get; set; }
 
-        public IEnumerable<AmazonTitanTextOutput>? Results { get; set; }
+        public IEnumerable<AmazonTitanTextOutput>? results { get; set; }
 
         public string? GetResponse()
         {
-            return Results?.FirstOrDefault()?.OutputText;
+            return results?.FirstOrDefault()?.OutputText;
         }
 
         public string? GetStopReason()
         {
-            return Results?.FirstOrDefault()?.CompletionReason;
+            return results?.FirstOrDefault()?.CompletionReason;
         }
     }
 }

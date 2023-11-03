@@ -42,13 +42,8 @@ namespace DotnetFMPlayground.Core
             );
             response.Body.ChunkReceived += async (sender, e) =>
             {
-                var chunk = await FoundationModelResponseBuilder.Build(modelId, e.EventStreamEvent.Bytes);
+                var chunk = await FoundationModelResponseBuilder.Build(modelId, e.EventStreamEvent.Bytes, true);
                 await chunckReceived(chunk?.GetResponse());
-
-                if (chunk?.GetStopReason() != null)
-                {
-                    response.Body.Dispose();
-                }
             };
             response.Body.ExceptionReceived += async (sender, e) =>
             {

@@ -11,13 +11,33 @@ namespace DotnetFMPlayground.Core.Builders
 {
     internal static class FoundationModelResponseBuilder
     {
-        internal static async Task<IFoundationModelResponse?> Build(string modelId, MemoryStream stream)
+        internal static async Task<IFoundationModelResponse?> Build(string modelId, MemoryStream stream, bool streaming = false)
         {
-            IFoundationModelResponse? response = modelId switch
+            IFoundationModelResponse? response;
+            switch(modelId)
             {
-                "anthropic.claude-instant-v1" or "anthropic.claude-v1" or "anthropic.claude-v2" => await JsonSerializer.DeserializeAsync<AnthropicClaudeResponse>(stream, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true }),
-                "stability.stable-diffusion-xl" or "stability.stable-diffusion-xl-v0" => await JsonSerializer.DeserializeAsync<StableDiffusionXLResponse>(stream, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true }),
-                _ => throw new NotSupportedException($"ModelId {modelId} not supported"),
+                case "anthropic.claude-instant-v1":
+                case "anthropic.claude-v1":
+                case "anthropic.claude-v2":
+                    response = await JsonSerializer.DeserializeAsync<AnthropicClaudeResponse>(stream, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                    break;
+                case "stability.stable-diffusion-xl-v0":
+                    response = await JsonSerializer.DeserializeAsync<StableDiffusionXLResponse>(stream, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                    break;
+                case "amazon.titan-text-lite-v1":
+                case "amazon.titan-text-express-v1":
+                case "amazon.titan-text-agile-v1":
+                    if (streaming)
+                    {
+                        response = await JsonSerializer.DeserializeAsync<AmazonTitanTextStreamingResponse>(stream, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                    }
+                    else
+                    {
+                        response = await JsonSerializer.DeserializeAsync<AmazonTitanTextResponse>(stream, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                    }
+                    break;
+                default:
+                    throw new NotSupportedException($"ModelId {modelId} not supported");
             };
             return response;
         }
