@@ -60,8 +60,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-
-        foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("IMAGE"));
+        foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("IMAGE") && ModelIds.IsSupported(x.ModelId));
         selectedModel = foundationModels.FirstOrDefault();
         await base.OnInitializedAsync();
         StateHasChanged();

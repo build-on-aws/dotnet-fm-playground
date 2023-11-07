@@ -75,9 +75,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-
-        FoundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("TEXT"));
-        SelectedModel = FoundationModels.FirstOrDefault(x => x.ModelId == "anthropic.claude-v2");
+        FoundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("TEXT") && ModelIds.IsSupported(x.ModelId));
         _timer.Elapsed += OnElapsed;
         await base.OnInitializedAsync();
         StateHasChanged();
