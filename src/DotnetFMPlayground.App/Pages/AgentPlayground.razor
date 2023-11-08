@@ -47,7 +47,8 @@
         Prompt prompt = new();
         prompt.Add(new PromptItem(PromptItemType.User, userPrompt.Prompt));
 
-        
+        outputText = await BedrockAgentRuntimeClient.InvokeAgent("JO1BTOC0WA", "TSTALIASID", new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
+
     }
 }
 
