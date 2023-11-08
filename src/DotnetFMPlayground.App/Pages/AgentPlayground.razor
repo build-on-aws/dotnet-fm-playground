@@ -1,0 +1,53 @@
+﻿@page "/agent-playground"
+@using System.Text;
+@using Amazon.BedrockRuntime;
+@using DotnetFMPlayground.Agent;
+@using DotnetFMPlayground.Core.Models;
+@using System.Text.Json;
+@inject AmazonBedrockAgentRuntimeClient BedrockAgentRuntimeClient
+@inject IJSRuntime JS
+
+<MudText Typo="Typo.h3">Agent Playground</MudText>
+<MudStack>
+    <EditForm Model="@userPrompt" OnSubmit="OnSubmit">
+        <MudCard>
+            <MudCardContent>
+                <MudTextField Counter=0 id="PromptId" Label="Prompt" @bind-Value="userPrompt.Prompt" Lines=5 Variant="Variant.Outlined" />
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="ml-auto">Submit</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </EditForm>
+    <MudCard>
+        <MudCardContent>
+            <MudField Id="ResponseField" Label="Response" Class="white-space-pre-line">@outputText</MudField>
+        </MudCardContent>
+    </MudCard>
+</MudStack>
+@code {
+
+    public class UserPrompt
+    {
+        public string Prompt { get; set; }
+    }
+
+    private UserPrompt userPrompt = new UserPrompt();
+
+    private string outputText;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        StateHasChanged();
+    }
+
+    private async Task OnSubmit(EditContext context)
+    {
+        Prompt prompt = new();
+        prompt.Add(new PromptItem(PromptItemType.User, userPrompt.Prompt));
+
+        
+    }
+}
+
