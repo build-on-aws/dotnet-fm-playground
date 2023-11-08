@@ -1,15 +1,9 @@
 ﻿using Amazon;
 using Amazon.Bedrock;
 using Amazon.BedrockRuntime;
-using Amazon.Runtime;
-using Amazon.Runtime.CredentialManagement;
-using Amazon.Util;
-using AwsSignatureVersion4;
 using DotnetFMPlayground.Agent;
-using DotnetFMPlayground.Core;
 using Microsoft.Extensions.Logging;
 using MudBlazor.Services;
-using System.Net.Http;
 
 namespace DotnetFMPlayground.App
 {
@@ -45,25 +39,11 @@ namespace DotnetFMPlayground.App
                     RegionEndpoint = RegionEndpoint.USEast1
                 }));
 
-            var chain = new CredentialProfileStoreChain();
-            AWSCredentials awsCredentials;
-            if (chain.TryGetAWSCredentials("default", out awsCredentials))
-            {
-                var signatureHandler = new AwsSignatureHandler(new AwsSignatureHandlerSettings("us-east-1", "bedrock-agent-runtime", awsCredentials))
-                {
-                    InnerHandler = new HttpClientHandler()
-                };
+            builder.Services.AddSingleton<AmazonBedrockAgentRuntimeClient>(
+                new AmazonBedrockAgentRuntimeClient()
+                );
 
-                var httpClient = new HttpClient(signatureHandler)
-                {
-                    BaseAddress = new Uri("https://bedrock-agent-runtime.us-east-1.amazonaws.com")
-                };
 
-                builder.Services.AddSingleton<AmazonBedrockAgentRuntimeClient>(
-                    new AmazonBedrockAgentRuntimeClient(httpClient)
-                    );
-                    
-            }
             return builder.Build();
         }
     }
