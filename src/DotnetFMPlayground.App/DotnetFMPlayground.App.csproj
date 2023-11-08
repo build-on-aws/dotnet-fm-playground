@@ -70,6 +70,8 @@
     </ItemGroup>
 
     <ItemGroup>
+        <PackageReference Include="AwsSignatureVersion4" Version="4.0.1" />
+        <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
         <PackageReference Include="Blazor.SpeechRecognition" Version="8.0.0" />
         <PackageReference Include="Blazor.SpeechSynthesis" Version="8.0.0" />
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
@@ -77,6 +79,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\DotnetFMPlayground.Agent\DotnetFMPlayground.Agent.csproj" />
       <ProjectReference Include="..\DotnetFMPlayground.Core\DotnetFMPlayground.Core.csproj" />
     </ItemGroup>
 
