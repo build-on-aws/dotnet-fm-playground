@@ -9,13 +9,51 @@
 
 <MudText Typo="Typo.h3">Agent Playground</MudText>
 <MudStack>
-    <EditForm Model="@userPrompt" OnSubmit="OnSubmit">
+    <MudCard>
+        <MudCardContent>
+            <MudTextField Label="Agent ID" @bind-Value="agentId" />
+            <MudTextField Label="Agent Alias ID" @bind-Value="agentAliasId" />
+        </MudCardContent>
+    </MudCard>
+    <EditForm @ref="editForm" Model="@userPrompt" OnSubmit="OnSubmit"  >
         <MudCard>
             <MudCardContent>
-                <MudTextField Counter=0 id="PromptId" Label="Prompt" @bind-Value="userPrompt.Prompt" Lines=5 Variant="Variant.Outlined" />
+
+                <MudTimeline Reverse=true>
+                    @foreach (var item in promptItems)
+                    {
+                        string label = item.Type == PromptItemType.User ? "Human" : "Assistant";
+                        <MudTimelineItem>
+                            <MudField Label="@label" Class="white-space-pre-line">@item.Prompt</MudField>
+                        </MudTimelineItem>
+                    }
+                    @if (!isThinking)
+                    {
+                        <MudTimelineItem>
+                            <MudTextField id="PromptId" Label="Human" @bind-Value="userPrompt.Prompt"/>
+                        </MudTimelineItem>
+                    }
+                </MudTimeline>
             </MudCardContent>
             <MudCardActions>
-                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="ml-auto">Submit</MudButton>
+                <MudStack Row="true" Class="flex-auto" Justify="Justify.FlexEnd">
+                    <MudButton Size="Size.Large" Variant="Variant.Filled" Color="Color.Primary" OnClick="Reset">
+                        <MudIcon Class="ms-n1" Icon="@Icons.Material.Filled.Replay" Size="Size.Small"></MudIcon>
+                        <MudText Class="ms-2">Reset</MudText>
+                    </MudButton>
+                    <MudButton Size="Size.Large" ButtonType="ButtonType.Submit" Disabled="@isThinking" Variant="Variant.Filled" Color="Color.Primary">
+                        @if (isThinking)
+                        {
+                            <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                            <MudText Class="ms-2">Thinking...</MudText>
+                        }
+                        else
+                        {
+                            <MudIcon Class="ms-n1" Icon="@Icons.Material.Filled.Send" Size="Size.Small"></MudIcon>
+                            <MudText Class="ms-2">Submit</MudText>
+                        }
+                    </MudButton>
+                </MudStack>
             </MudCardActions>
         </MudCard>
     </EditForm>
@@ -25,7 +63,10 @@
         </MudCardContent>
     </MudCard>
 </MudStack>
-@code {
+    @code {
+    private string agentId = "C54LPL8X99";
+
+    private string agentAliasId = "TSTALIASID";
 
     public class UserPrompt
     {
@@ -34,7 +75,16 @@
 
     private UserPrompt userPrompt = new UserPrompt();
 
+    private ICollection<PromptItem> promptItems = new List<PromptItem>();
+
+    private bool isThinking = false;
+
     private string outputText;
+
+    private Guid sessionId = new Guid();
+
+    private EditForm editForm;
+
 
     protected override async Task OnInitializedAsync()
     {
@@ -44,11 +94,43 @@
 
     private async Task OnSubmit(EditContext context)
     {
-        Prompt prompt = new();
-        prompt.Add(new PromptItem(PromptItemType.User, userPrompt.Prompt));
+        isThinking = true;
+        outputText = "";
 
-        outputText = await BedrockAgentRuntimeClient.InvokeAgent("JO1BTOC0WA", "TSTALIASID", new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
+        PromptItem inputPrompt = new(PromptItemType.User, userPrompt.Prompt);
+        promptItems.Add(inputPrompt);
 
+        userPrompt.Prompt = "";
+
+        StateHasChanged();
+
+        PromptItem agentPrompt = new(PromptItemType.FMAnswer, "");
+        promptItems.Add(agentPrompt);
+
+        await foreach (var item in BedrockAgentRuntimeClient.InvokeAgent(agentId, agentAliasId, sessionId.ToString(), inputPrompt.Prompt))
+        {
+            await InvokeAsync(async () =>
+            {
+                outputText += " " + item;
+                agentPrompt.Prompt += " " + item;
+                StateHasChanged();
+            });
+        }
+
+        await InvokeAsync(async () =>
+        {
+            isThinking = false;
+            StateHasChanged();
+        });
+
+    }
+
+    private void Reset(MouseEventArgs e)
+    {
+        sessionId = new Guid();
+        userPrompt.Prompt = "";
+        outputText = "";
+        promptItems.Clear();
     }
 }
 
