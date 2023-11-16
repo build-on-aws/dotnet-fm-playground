@@ -57,11 +57,6 @@
             </MudCardActions>
         </MudCard>
     </EditForm>
-    <MudCard>
-        <MudCardContent>
-            <MudField Id="ResponseField" Label="Response" Class="white-space-pre-line">@outputText</MudField>
-        </MudCardContent>
-    </MudCard>
 </MudStack>
     @code {
     private string agentId = "C54LPL8X99";
@@ -79,8 +74,6 @@
 
     private bool isThinking = false;
 
-    private string outputText;
-
     private Guid sessionId = new Guid();
 
     private EditForm editForm;
@@ -95,7 +88,6 @@
     private async Task OnSubmit(EditContext context)
     {
         isThinking = true;
-        outputText = "";
 
         PromptItem inputPrompt = new(PromptItemType.User, userPrompt.Prompt);
         promptItems.Add(inputPrompt);
@@ -111,7 +103,6 @@
         {
             await InvokeAsync(async () =>
             {
-                outputText += " " + item;
                 agentPrompt.Prompt += " " + item;
                 StateHasChanged();
             });
@@ -129,7 +120,6 @@
     {
         sessionId = new Guid();
         userPrompt.Prompt = "";
-        outputText = "";
         promptItems.Clear();
     }
 }
