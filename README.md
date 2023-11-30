@@ -25,12 +25,12 @@ In addition, it also lists and displays the foundation models you have access to
 ## Dev Environment Prerequisite
 
 This sample has been developed using:
-* .NET 7.0
-* .NET MAUI 7.0
+* .NET 8.0
+* .NET MAUI 8.0
 
-You need to install .NET 7.0 SDK. 
+You need to install .NET 8.0 SDK. 
 
-For .NET MAUI 7.0:
+For .NET MAUI 8.0:
 * if you use Visual Studio 2022, install the .NET Multi-platform App UI development
 workload from the Visual Studio Installer
 * otherwise, you can install maui-windows and maui-maccatalyst workload running the 
