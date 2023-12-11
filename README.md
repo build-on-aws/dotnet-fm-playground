@@ -10,11 +10,14 @@ service that offers a choice of high-performing foundation models (FMs)
 from leading AI companies like AI21 Labs, Anthropic, Cohere, Meta, Stability AI, 
 and Amazon via a single API.
 
-In order to let you test and interact with the different foundation models, the .NET FM Playground offers you four playgrounds:
+It also offers Knowledge Bases and Agents for Amazon Bedrock to speed up the implementation of Retrieval Augmented Generation pattern and execute complex tasks.
+
+In order to let you test and interact with the different foundation models and advanced features, the .NET FM Playground offers you five playgrounds:
 * A text playground
 * A chat playground
 * A voice chat playground
 * An image playground
+* An agent playground
 
 In addition, it also lists and displays the foundation models you have access to and their characteristics.
 
@@ -63,7 +66,14 @@ can add access to specific models using the model access page.
 
 To learn more about managing model access, read the following documentation:
 * https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html 
- 
+
+### Model Access
+
+To use the agent playground, you first need to create an agent in your AWS account.
+
+To learn more about creating and managing agents for Amazon Bedrock, read the following documentation:
+* https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html
+
 ## Repository Structure
 
 The repository has the following structure
