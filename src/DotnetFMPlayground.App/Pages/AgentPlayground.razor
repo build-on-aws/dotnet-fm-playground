@@ -30,6 +30,7 @@
                         }
                     }
                 </MudSelect>
+                <MudSwitch @bind-Checked="@enableTrace" Label="Enable Trace" Color="Color.Info"/>
             </MudCardContent>
         </MudCard>
         <EditForm @ref="editForm" Model="@userPrompt" OnSubmit="OnSubmit">
@@ -275,6 +276,8 @@
         private List<OrchestrationTrace> orchestrationTraces = new();
         private List<PostProcessingTrace> postProcessingTraces = new();
 
+        private bool enableTrace = false;
+
 
         protected override async Task OnInitializedAsync()
         {
@@ -315,7 +318,7 @@
                 AgentAliasId = selectedAgentAlias.AgentAliasId,
                 SessionId = sessionId.ToString(),
                 InputText = inputPrompt.Prompt,
-                EnableTrace = false
+                EnableTrace = enableTrace
             });
 
             foreach (var item in response.Completion)
