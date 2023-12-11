@@ -1,7 +1,8 @@
 ﻿using Amazon;
 using Amazon.Bedrock;
 using Amazon.BedrockRuntime;
-using DotnetFMPlayground.Agent;
+using Amazon.BedrockAgent;
+using Amazon.BedrockAgentRuntime;
 using Microsoft.Extensions.Logging;
 using MudBlazor.Services;
 
@@ -42,7 +43,8 @@ namespace DotnetFMPlayground.App
             builder.Services.AddSingleton<AmazonBedrockAgentRuntimeClient>(
                 new AmazonBedrockAgentRuntimeClient()
                 );
-
+            
+            builder.Services.AddSingleton<AmazonBedrockAgentClient>();
 
             return builder.Build();
         }
