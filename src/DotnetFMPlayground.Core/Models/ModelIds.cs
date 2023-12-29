@@ -18,7 +18,7 @@ namespace DotnetFMPlayground.Core.Models
             "amazon.titan-text-lite-v1",
             "amazon.titan-text-express-v1",
             "amazon.titan-text-agile-v1",
-            "amazon.titan-embed-text-v1",
+            "amazon.titan-image-generator-v1",
             "cohere.command-text-v14",
             "ai21.j2-mid-v1",
             "ai21.j2-ultra-v1"
@@ -90,14 +90,6 @@ namespace DotnetFMPlayground.Core.Models
             }
         }
 
-        public static string AMAZON_TITAN_EMBED_TEXT_V1
-        {
-            get
-            {
-                return modelIds[7];
-            }
-        }
-
         public static string COHERE_COMMAND_TEXT_V14
         {
             get
@@ -119,6 +111,14 @@ namespace DotnetFMPlayground.Core.Models
             get
             {
                 return modelIds[10];
+            }
+        }
+        
+        public static string AMAZON_TITAN_IMAGE_GENERATOR_v1
+        {
+            get
+            {
+                return modelIds[7];
             }
         }
 

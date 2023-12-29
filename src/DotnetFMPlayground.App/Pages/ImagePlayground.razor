@@ -4,6 +4,8 @@
 @using Amazon.Bedrock;
 @using Amazon.BedrockRuntime;
 @using DotnetFMPlayground.Core.Models;
+@using DotnetFMPlayground.Core.Models.InferenceParameters.AmazonTitanImageGeneratorG1
+@using DotnetFMPlayground.Core.Models.ModelResponse
 @inject AmazonBedrockRuntimeClient BedrockRuntimeClient
 @inject AmazonBedrockClient BedrockClient
 @inject IJSRuntime JS
@@ -69,18 +71,38 @@
     private async Task OnSubmit(EditContext context)
     {
 
-        Prompt prompt = new();
-        prompt.Add(new PromptItem(PromptItemType.User, userPrompt.Prompt));
+        Prompt prompt =
+        [
+            new PromptItem(PromptItemType.User, userPrompt.Prompt)
+        ];
 
-        var response = await BedrockRuntimeClient.InvokeModelAsync(
-            selectedModel.ModelId,
-            prompt,
-            new()
-            {
-            }
-        );
-
-        imageSrc = $"data:image/jpeg;base64,{(object)response.GetResponse()}";
+        if (selectedModel.ModelId == "amazon.titan-image-generator-v1")
+        {   
+            AmazonTitanImageGeneratorG1Response response = await BedrockRuntimeClient.InvokeTitanImageGeneratorG1ForTextToImageAsync(
+                new TextToImageParams()
+                {
+                    Text = new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString()
+                },
+                new ImageGenerationConfig()
+                {
+                    NumberOfImages = 1,
+                    CfgScale = 8.0f,
+                    Height = 512,
+                    Width = 512,
+                    Quality = ImageGenerationConfig.ImageQuality.Standard,
+                    Seed = 10
+                });
+            imageSrc = $"data:image/jpeg;base64,{(object)response?.Images?.FirstOrDefault()}";
+        }
+        else if (selectedModel.ModelId == ModelIds.STABILITY_AI_STABLE_DIFFUSION_XL_V0)
+        {
+            StableDiffusionXLResponse response = await BedrockRuntimeClient.InvokeStabilityAIStableDiffusionXLv1ForTextToImageAsync(
+                new Core.Models.InferenceParameters.StabilityAIStableDiffusionXL.TextToImageParams
+                {
+                    TextPrompts = new []{ new Core.Models.InferenceParameters.StabilityAIStableDiffusionXL.TextToImageParams.TextPrompt() { Text = new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString()}},
+                });
+            imageSrc = $"data:image/jpeg;base64,{(object)response?.Artifacts?.FirstOrDefault()?.Base64}";
+        }
         StateHasChanged();
         await JS.InvokeVoidAsync("scrollToElement", "ImageId");
     }
