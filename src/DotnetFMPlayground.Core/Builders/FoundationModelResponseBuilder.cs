@@ -25,9 +25,8 @@ namespace DotnetFMPlayground.Core.Builders
                 case var _ when modelId == ModelIds.STABILITY_AI_STABLE_DIFFUSION_XL_V0:
                     response = await JsonSerializer.DeserializeAsync<StableDiffusionXLResponse>(stream, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
                     break;
-                case var _ when modelId == ModelIds.AMAZON_TITAN_TEXT_LITE_V1:
-                case var _ when modelId == ModelIds.AMAZON_TITAN_TEXT_EXPRESS_V1:
-                case var _ when modelId == ModelIds.AMAZON_TITAN_TEXT_AGILE_V1:
+                case var _ when modelId == ModelIds.AMAZON_TITAN_TEXT_LITE_G1_V1:
+                case var _ when modelId == ModelIds.AMAZON_TITAN_TEXT_EXPRESS_G1_V1:
                     if (streaming)
                     {
                         response = await JsonSerializer.DeserializeAsync<AmazonTitanTextStreamingResponse>(stream, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });

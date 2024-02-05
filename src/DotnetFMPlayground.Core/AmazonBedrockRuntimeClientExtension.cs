@@ -1,4 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -14,45 +16,87 @@ namespace DotnetFMPlayground.Core
 {
     public static class AmazonBedrockRuntimeClientExtension
     {
-        public static async Task<IFoundationModelResponse?> InvokeModelAsync(this AmazonBedrockRuntimeClient client,
-            string modelId,
-            Prompt prompt,
-            BaseInferenceParameters inferenceParameters,
-            CancellationToken cancellationToken = default
-            )
+        public static async Task<IFoundationModelResponse?> InvokeModelAsync(this AmazonBedrockRuntimeClient client, string modelId, Prompt prompt, BaseInferenceParameters inferenceParameters, CancellationToken cancellationToken = default)
         {
-            var invokeModelResponse = await client.InvokeModelAsync(
-                InvokeModelRequestBuilder.Build(modelId, prompt, inferenceParameters),
-                cancellationToken
-            );
-
+            var invokeModelResponse = await client.InvokeModelAsync(InvokeModelRequestBuilder.Build(modelId, prompt, inferenceParameters), cancellationToken);
             return await FoundationModelResponseBuilder.Build(modelId, invokeModelResponse.Body);
         }
 
-        public static async Task InvokeModelWithResponseStreamAsync(
-            this AmazonBedrockRuntimeClient client,
-            string modelId,
-            Prompt prompt, 
-            BaseInferenceParameters inferenceParameters,
-            Func<string?, Task> chunckReceived,
-            Func<string?, Task> exceptionReceived, 
-            CancellationToken cancellationToken = default)
+        public static async Task InvokeModelWithResponseStreamAsync(this AmazonBedrockRuntimeClient client, string modelId, Prompt prompt, BaseInferenceParameters inferenceParameters, Func<string?, Task> chunkReceived, Func<string?, Task> exceptionReceived, CancellationToken cancellationToken = default)
         {
-            var response = await client.InvokeModelWithResponseStreamAsync(
-                InvokeModelRequestBuilder.BuildWithResponseStream(modelId, prompt, inferenceParameters),
-                cancellationToken
-            );
+            var response = await client.InvokeModelWithResponseStreamAsync(InvokeModelRequestBuilder.BuildWithResponseStream(modelId, prompt, inferenceParameters), cancellationToken);
+            
             response.Body.ChunkReceived += async (sender, e) =>
             {
                 var chunk = await FoundationModelResponseBuilder.Build(modelId, e.EventStreamEvent.Bytes, true);
-                await chunckReceived(chunk?.GetResponse());
+                await chunkReceived(chunk?.GetResponse());
             };
+            
             response.Body.ExceptionReceived += async (sender, e) =>
             {
                 await exceptionReceived(e.EventStreamException.Message);
             };
 
             response.Body.StartProcessing();
+        }
+        
+        /// <summary>
+        /// Invoke Jurassic 2 model
+        /// </summary>
+        /// <param name="client">The Amazon Bedrock Runtime client object</param>
+        /// <param name="modelId">The Jurassic 2 model Id</param>
+        /// <param name="prompt">The prompt</param>
+        /// <param name="textGenerationConfig">The text generation configuration</param>
+        /// <returns>The Jurassic 2 model response</returns>
+        private static async Task<AI21LabsJurassic2Response?> InvokeJurassic2Async(this AmazonBedrockRuntimeClient client, string modelId, string prompt, Models.InferenceParameters.AI21LabsJurassic2.TextGenerationConfig? textGenerationConfig = null)
+        {
+            if (modelId != ModelIds.AI21_LABS_JURASSIC_V2_MID_V1 && modelId != ModelIds.AI21_LABS_JURASSIC_V2_ULTRA_V1)
+            {
+                throw new ArgumentException($"modelId is {modelId}, expected {nameof(ModelIds.AI21_LABS_JURASSIC_V2_MID_V1)} or {nameof(ModelIds.AI21_LABS_JURASSIC_V2_ULTRA_V1)}");
+            }
+            JsonObject? payload = null;
+            if (textGenerationConfig != null)
+            {
+                Validator.ValidateObject(textGenerationConfig, new ValidationContext(textGenerationConfig), true);
+                payload = JsonSerializer.SerializeToNode(textGenerationConfig)?.AsObject();
+            }
+
+            payload ??= new();
+            payload.Add("prompt", prompt);
+            
+            InvokeModelResponse response = await client.InvokeModelAsync(new InvokeModelRequest()
+            {
+                ModelId = modelId,
+                ContentType = "application/json",
+                Accept = "application/json",
+                Body = AWSSDKUtils.GenerateMemoryStreamFromString(payload.ToJsonString())
+            });
+
+            return JsonSerializer.Deserialize<AI21LabsJurassic2Response>(response.Body);
+        }
+        
+        /// <summary>
+        /// Invoke Jurassic 2 Mid for text completion
+        /// </summary>
+        /// <param name="client">The Amazon Bedrock Runtime client object</param>
+        /// <param name="prompt">The prompt</param>
+        /// <param name="textGenerationConfig">The text generation configuration</param>
+        /// <returns>The Jurassic 2 Mid model response</returns>
+        public static async Task<AI21LabsJurassic2Response?> InvokeJurassic2MidAsync(this AmazonBedrockRuntimeClient client, string prompt, Models.InferenceParameters.AI21LabsJurassic2.TextGenerationConfig? textGenerationConfig = null)
+        {
+            return await client.InvokeJurassic2Async(ModelIds.AI21_LABS_JURASSIC_V2_MID_V1, prompt, textGenerationConfig);
+        }
+        
+        /// <summary>
+        /// Invoke Jurassic 2 Ultra for text completion
+        /// </summary>
+        /// <param name="client">The Amazon Bedrock Runtime client object</param>
+        /// <param name="prompt">The prompt</param>
+        /// <param name="textGenerationConfig">The text generation configuration</param>
+        /// <returns>The Jurassic 2 Mid model response</returns>
+        public static async Task<AI21LabsJurassic2Response?> InvokeJurassic2UltraAsync(this AmazonBedrockRuntimeClient client, string prompt, Models.InferenceParameters.AI21LabsJurassic2.TextGenerationConfig? textGenerationConfig = null)
+        {
+            return await client.InvokeJurassic2Async(ModelIds.AI21_LABS_JURASSIC_V2_ULTRA_V1, prompt, textGenerationConfig);
         }
         
         /// <summary>
@@ -88,7 +132,7 @@ namespace DotnetFMPlayground.Core
 
             InvokeModelResponse response = await client.InvokeModelAsync(new InvokeModelRequest()
             {
-                 ModelId = ModelIds.AMAZON_TITAN_IMAGE_GENERATOR_v1,
+                 ModelId = ModelIds.AMAZON_TITAN_IMAGE_GENERATOR_G1_V1,
                  ContentType = "application/json",
                  Accept = "application/json",
                  Body = AWSSDKUtils.GenerateMemoryStreamFromString(payload.ToJsonString())
@@ -118,8 +162,203 @@ namespace DotnetFMPlayground.Core
             
             return JsonSerializer.Deserialize<StableDiffusionXLResponse>(response.Body, new JsonSerializerOptions());
         }
-    }
-    
-    
+
+        /// <summary>
+        /// Invoke Titan Text G1 model for text completion
+        /// </summary>
+        /// <param name="client">The Amazon Bedrock Runtime client object</param>
+        /// <param name="modelId">The model Id of the Titan Text G1 model</param>
+        /// <param name="inputText">The input text to complete</param>
+        /// <param name="textGenerationConfig">The text generation configuration</param>
+        /// <returns>The Titan Text G1 model response</returns>
+        private static async Task<AmazonTitanTextResponse?> InvokeTitanTextG1Async(this AmazonBedrockRuntimeClient client, string modelId, string inputText, Models.InferenceParameters.AmazonTitanText.TextGenerationConfig? textGenerationConfig = null)
+        {
+            if (modelId != ModelIds.AMAZON_TITAN_TEXT_LITE_G1_V1 && modelId != ModelIds.AMAZON_TITAN_TEXT_EXPRESS_G1_V1)
+            {
+                throw new ArgumentException($"modelId is {modelId}, expected {nameof(ModelIds.AMAZON_TITAN_TEXT_LITE_G1_V1)} or {nameof(ModelIds.AMAZON_TITAN_TEXT_EXPRESS_G1_V1)}");
+            }
+            JsonObject payload = new ()
+            {
+                ["inputText"] = inputText
+            };
+
+            if (textGenerationConfig != null)
+            {
+                Validator.ValidateObject(textGenerationConfig, new ValidationContext(textGenerationConfig), true);
+                payload.Add("imageGenerationConfig", JsonSerializer.SerializeToNode(textGenerationConfig));
+            }
+
+            InvokeModelResponse response = await client.InvokeModelAsync(new InvokeModelRequest()
+            {
+                ModelId = modelId,
+                ContentType = "application/json",
+                Accept = "application/json",
+                Body = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(payload))
+            });
+            
+            return JsonSerializer.Deserialize<AmazonTitanTextResponse>(response.Body);   
+        }
         
+        /// <summary>
+        /// Invoke Titan Text G1 Express model for text completion
+        /// </summary>
+        /// <param name="client">The Amazon Bedrock Runtime client object</param>
+        /// <param name="inputText">The input text to complete</param>
+        /// <param name="textGenerationConfig">The text generation configuration</param>
+        /// <returns>The Titan Text G1 Express model response</returns>
+        public static async Task<AmazonTitanTextResponse?> InvokeTitanTextG1Express(this AmazonBedrockRuntimeClient client, string inputText, Models.InferenceParameters.AmazonTitanText.TextGenerationConfig? textGenerationConfig = null)
+        {
+            return await client.InvokeTitanTextG1Async(ModelIds.AMAZON_TITAN_TEXT_EXPRESS_G1_V1, inputText, textGenerationConfig);
+        }
+
+        /// <summary>
+        /// Invoke Titan Text G1 Lite model for text completion
+        /// </summary>
+        /// <param name="client">The Amazon Bedrock Runtime client object</param>
+        /// <param name="inputText">The input text to complete</param>
+        /// <param name="textGenerationConfig">The text generation configuration</param>
+        /// <returns>The Titan Text G1 Lite model response</returns>
+        public static async Task<AmazonTitanTextResponse?> InvokeTitanTextG1Lite(this AmazonBedrockRuntimeClient client, string inputText, Models.InferenceParameters.AmazonTitanText.TextGenerationConfig? textGenerationConfig = null)
+        {
+            return await client.InvokeTitanTextG1Async(ModelIds.AMAZON_TITAN_TEXT_LITE_G1_V1, inputText, textGenerationConfig);
+        }
+
+        public static async Task<AmazonTitanEmbeddingsResponse?> InvokeTitanEmbeddingsG1Text(
+            this AmazonBedrockRuntimeClient client)
+        {
+            throw new NotImplementedException();
+        }
+
+        public static async Task<AmazonTitanMultimodalEmbeddingsResponse?> InvokeTitanMultimodalEmbeddingsG1(
+            this AmazonBedrockRuntimeClient client)
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        /// Invoke Claude model for text completion
+        /// </summary>
+        /// <param name="client">The Amazon Bedrock Runtime client object</param>
+        /// <param name="modelId">The model Id of the Claude model</param>
+        /// <param name="prompt">The input text to complete</param>
+        /// <param name="textGenerationConfig">The text generation configuration</param>
+        /// <returns>The Claude model response</returns>
+        private static async Task<AnthropicClaudeResponse?> InvokeClaudeAsync(this AmazonBedrockRuntimeClient client, string modelId, string prompt, Models.InferenceParameters.AnthropicClaude.TextGenerationConfig? textGenerationConfig = null)
+        {
+            if (modelId != ModelIds.ANTHROPIC_CLAUDE_V1 && modelId != ModelIds.ANTHROPIC_CLAUDE_V2 && modelId != ModelIds.ANTHROPIC_CLAUDE_V2_1 && modelId != ModelIds.ANTHROPIC_CLAUDE_INSTANT_V1 )
+            {
+                throw new ArgumentException($"modelId is {modelId}, expected {nameof(ModelIds.ANTHROPIC_CLAUDE_V1)} or {nameof(ModelIds.ANTHROPIC_CLAUDE_V2)} or {nameof(ModelIds.ANTHROPIC_CLAUDE_V2_1)} or {nameof(ModelIds.ANTHROPIC_CLAUDE_INSTANT_V1)}");
+            }
+            JsonObject? payload = null;
+            if (textGenerationConfig != null)
+            {
+                Validator.ValidateObject(textGenerationConfig, new ValidationContext(textGenerationConfig), true);
+                payload = JsonSerializer.SerializeToNode(textGenerationConfig)?.AsObject();
+            }
+
+            if (payload is null)
+            {
+                payload = new JsonObject { { "max_tokens_to_sample", 200 } };
+            }
+            payload.Add("prompt", prompt);
+            
+            InvokeModelResponse response = await client.InvokeModelAsync(new InvokeModelRequest()
+            {
+                ModelId = modelId,
+                ContentType = "application/json",
+                Accept = "application/json",
+                Body = AWSSDKUtils.GenerateMemoryStreamFromString(payload.ToJsonString())
+            });
+
+            return JsonSerializer.Deserialize<AnthropicClaudeResponse>(response.Body);
+        }
+
+        /// <summary>
+        /// Invoke Claude V1 model for text completion
+        /// </summary>
+        /// <param name="client">The Amazon Bedrock Runtime client object</param>
+        /// <param name="prompt">The input text to complete</param>
+        /// <param name="textGenerationConfig">The text generation configuration</param>
+        /// <returns>The Claude model response</returns>
+        public static async Task<AnthropicClaudeResponse?> InvokeClaudeV1Async(this AmazonBedrockRuntimeClient client, string prompt, Models.InferenceParameters.AnthropicClaude.TextGenerationConfig? textGenerationConfig = null)
+        {
+            return await client.InvokeClaudeAsync(ModelIds.ANTHROPIC_CLAUDE_V1, prompt, textGenerationConfig);
+        }
+        
+        /// <summary>
+        /// Invoke Claude V2 model for text completion
+        /// </summary>
+        /// <param name="client">The Amazon Bedrock Runtime client object</param>
+        /// <param name="prompt">The input text to complete</param>
+        /// <param name="textGenerationConfig">The text generation configuration</param>
+        /// <returns>The Claude model response</returns>
+        public static async Task<AnthropicClaudeResponse?> InvokeClaudeV2Async(this AmazonBedrockRuntimeClient client, string prompt, Models.InferenceParameters.AnthropicClaude.TextGenerationConfig? textGenerationConfig = null)
+        {
+            return await client.InvokeClaudeAsync(ModelIds.ANTHROPIC_CLAUDE_V2, prompt, textGenerationConfig);
+        }
+        
+        /// <summary>
+        /// Invoke Claude V2.1 model for text completion
+        /// </summary>
+        /// <param name="client">The Amazon Bedrock Runtime client object</param>
+        /// <param name="prompt">The input text to complete</param>
+        /// <param name="textGenerationConfig">The text generation configuration</param>
+        /// <returns>The Claude model response</returns>
+        public static async Task<AnthropicClaudeResponse?> InvokeClaudeV2_1Async(this AmazonBedrockRuntimeClient client, string prompt, Models.InferenceParameters.AnthropicClaude.TextGenerationConfig? textGenerationConfig = null)
+        {
+            return await client.InvokeClaudeAsync(ModelIds.ANTHROPIC_CLAUDE_V2_1, prompt, textGenerationConfig);
+        }
+        
+        /// <summary>
+        /// Invoke Claude Instant V1 model for text completion
+        /// </summary>
+        /// <param name="client">The Amazon Bedrock Runtime client object</param>
+        /// <param name="prompt">The input text to complete</param>
+        /// <param name="textGenerationConfig">The text generation configuration</param>
+        /// <returns>The Claude model response</returns>
+        public static async Task<AnthropicClaudeResponse?> InvokeClaudeInstantV1Async(this AmazonBedrockRuntimeClient client, string prompt, Models.InferenceParameters.AnthropicClaude.TextGenerationConfig? textGenerationConfig = null)
+        {
+            return await client.InvokeClaudeAsync(ModelIds.ANTHROPIC_CLAUDE_INSTANT_V1, prompt, textGenerationConfig);
+        }
+        
+        public static async Task<CohereCommandResponse?> InvokeCommandV14(this AmazonBedrockRuntimeClient client)
+        {
+            throw new NotImplementedException();
+        }
+        
+        public static async Task<CohereCommandResponse?> InvokeCommandLightV14(this AmazonBedrockRuntimeClient client)
+        {
+            throw new NotImplementedException();
+        }
+        
+        public static async Task<CohereEmbedEnglishResponse?> InvokeEmbedEnglishV3(this AmazonBedrockRuntimeClient client)
+        {
+            throw new NotImplementedException();
+        }
+        
+        public static async Task<CohereEmbedMultilingualResponse?> InvokeEmbedMultilingualV3(this AmazonBedrockRuntimeClient client)
+        {
+            throw new NotImplementedException();
+        }
+
+        public static async Task<MetaLlama2ChatResponse?> InvokeLlama2Chat13Bv1(this AmazonBedrockRuntimeClient client)
+        {
+            throw new NotImplementedException();
+        }
+        
+        public static async Task<MetaLlama2ChatResponse?> InvokeLlama2Chat70Bv1(this AmazonBedrockRuntimeClient client)
+        {
+            throw new NotImplementedException();
+        }
+        
+        public static async Task<MetaLlama2Response?> InvokeLlama213Bv1(this AmazonBedrockRuntimeClient client)
+        {
+            throw new NotImplementedException();
+        }
+        
+        public static async Task<MetaLlama2Response?> InvokeLlama270Bv1(this AmazonBedrockRuntimeClient client)
+        {
+            throw new NotImplementedException();
+        }
+    }
 }
