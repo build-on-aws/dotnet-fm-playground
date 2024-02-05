@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace DotnetFMPlayground.Core.Models.ModelResponse
@@ -10,24 +11,30 @@ namespace DotnetFMPlayground.Core.Models.ModelResponse
     {
         public class AmazonTitanTextOutput
         {
+            [JsonPropertyName("tokenCount")]
             public int TokenCount { get; set; }
 
+            [JsonPropertyName("outputText")]
             public string? OutputText { get; set; }
 
+            [JsonPropertyName("completionReason")]
             public string? CompletionReason { get; set; }
         }
+        
+        [JsonPropertyName("inputTextTokenCount")]
         public int InputTextTokenCount { get; set; }
 
-        public IEnumerable<AmazonTitanTextOutput>? results { get; set; }
+        [JsonPropertyName("results")]
+        public IEnumerable<AmazonTitanTextOutput>? Results { get; set; }
 
         public string? GetResponse()
         {
-            return results?.FirstOrDefault()?.OutputText;
+            return Results?.FirstOrDefault()?.OutputText;
         }
 
         public string? GetStopReason()
         {
-            return results?.FirstOrDefault()?.CompletionReason;
+            return Results?.FirstOrDefault()?.CompletionReason;
         }
     }
 }

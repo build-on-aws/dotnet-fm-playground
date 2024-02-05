@@ -1,16 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Text.Json.Serialization;
 
 namespace DotnetFMPlayground.Core.Models.ModelResponse
 {
     public class AnthropicClaudeResponse : IFoundationModelResponse
     {
-        public string? Completion { get; set; }
+        [JsonPropertyName("completion")] public string? Completion { get; init; }
 
-        public string? Stop_Reason { get; set; }
+        [JsonPropertyName("stop_reason")] public string? StopReason { get; init; }
+        
+        [JsonPropertyName("stop")] public string? Stop { get; init; }
 
         public string? GetResponse()
         {
@@ -19,7 +17,7 @@ namespace DotnetFMPlayground.Core.Models.ModelResponse
 
         public string? GetStopReason()
         {
-            return Stop_Reason;
+            return StopReason;
         }
     }
 }
