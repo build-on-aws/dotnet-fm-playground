@@ -124,6 +124,18 @@
                 outputText = response?.GetResponse();
                 StateHasChanged();
             }
+            else if (selectedModel.ModelId == ModelIds.COHERE_COMMAND_TEXT_V14)
+            {
+                var response = await BedrockRuntimeClient.InvokeCommandV14(new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
+                outputText = response?.GetResponse();
+                StateHasChanged();
+            }
+            else if (selectedModel.ModelId == ModelIds.COHERE_COMMAND_TEXT_LIGHT_V14)
+            {
+                var response = await BedrockRuntimeClient.InvokeCommandLightV14(new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
+                outputText = response?.GetResponse();
+                StateHasChanged();
+            }
             else if (!(selectedModel.ResponseStreamingSupported && ModelIds.IsStreamingSupported(selectedModel.ModelId)))
             {
                 outputText = "Thinking...";
