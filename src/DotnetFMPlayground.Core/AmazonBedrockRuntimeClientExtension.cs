@@ -10,6 +10,7 @@ using Amazon.Util;
 using DotnetFMPlayground.Core.Builders;
 using DotnetFMPlayground.Core.Models;
 using DotnetFMPlayground.Core.Models.InferenceParameters;
+using DotnetFMPlayground.Core.Models.InferenceParameters.AnthropicClaude;
 using DotnetFMPlayground.Core.Models.ModelResponse;
 
 namespace DotnetFMPlayground.Core
@@ -249,17 +250,16 @@ namespace DotnetFMPlayground.Core
             {
                 throw new ArgumentException($"modelId is {modelId}, expected {nameof(ModelIds.ANTHROPIC_CLAUDE_V1)} or {nameof(ModelIds.ANTHROPIC_CLAUDE_V2)} or {nameof(ModelIds.ANTHROPIC_CLAUDE_V2_1)} or {nameof(ModelIds.ANTHROPIC_CLAUDE_INSTANT_V1)}");
             }
-            JsonObject? payload = null;
             if (textGenerationConfig != null)
             {
                 Validator.ValidateObject(textGenerationConfig, new ValidationContext(textGenerationConfig), true);
-                payload = JsonSerializer.SerializeToNode(textGenerationConfig)?.AsObject();
+            }
+            else
+            {
+                textGenerationConfig = new TextGenerationConfig();
             }
 
-            if (payload is null)
-            {
-                payload = new JsonObject { { "max_tokens_to_sample", 200 } };
-            }
+            JsonObject payload = JsonSerializer.SerializeToNode(textGenerationConfig)?.AsObject() ?? new ();
             payload.Add("prompt", prompt);
             
             InvokeModelResponse response = await client.InvokeModelAsync(new InvokeModelRequest()
@@ -321,14 +321,63 @@ namespace DotnetFMPlayground.Core
             return await client.InvokeClaudeAsync(ModelIds.ANTHROPIC_CLAUDE_INSTANT_V1, prompt, textGenerationConfig);
         }
         
-        public static async Task<CohereCommandResponse?> InvokeCommandV14(this AmazonBedrockRuntimeClient client)
+        /// <summary>
+        /// Invoke Command v14 model for text completion
+        /// </summary>
+        /// <param name="client">The Amazon Bedrock Runtime client object</param>
+        /// <param name="modelId">The model Id of the Command model</param>
+        /// <param name="prompt">The input text to complete</param>
+        /// <param name="textGenerationConfig">The text generation configuration</param>
+        /// <returns>The Command model response</returns>
+        private static async Task<CohereCommandResponse?> InvokeCommandV14(this AmazonBedrockRuntimeClient client, string modelId, string prompt, Models.InferenceParameters.Cohere.TextGenerationConfig? textGenerationConfig = null)
         {
-            throw new NotImplementedException();
+            if (modelId != ModelIds.COHERE_COMMAND_TEXT_V14 && modelId != ModelIds.COHERE_COMMAND_TEXT_LIGHT_V14)
+            {
+                throw new ArgumentException($"modelId is {modelId}, expected {nameof(ModelIds.COHERE_COMMAND_TEXT_V14)} or {nameof(ModelIds.COHERE_COMMAND_TEXT_LIGHT_V14)}");
+            }
+            JsonObject? payload = null;
+            if (textGenerationConfig != null)
+            {
+                Validator.ValidateObject(textGenerationConfig, new ValidationContext(textGenerationConfig), true);
+                payload = JsonSerializer.SerializeToNode(textGenerationConfig)?.AsObject();
+            }
+
+            payload??= new JsonObject();
+            payload.Add("prompt", prompt);
+            
+            InvokeModelResponse response = await client.InvokeModelAsync(new InvokeModelRequest()
+            {
+                ModelId = modelId,
+                ContentType = "application/json",
+                Accept = "application/json",
+                Body = AWSSDKUtils.GenerateMemoryStreamFromString(payload.ToJsonString())
+            });
+
+            return JsonSerializer.Deserialize<CohereCommandResponse>(response.Body);
         }
         
-        public static async Task<CohereCommandResponse?> InvokeCommandLightV14(this AmazonBedrockRuntimeClient client)
+        /// <summary>
+        /// Invoke Command v14 model for text completion
+        /// </summary>
+        /// <param name="client">The Amazon Bedrock Runtime client object</param>
+        /// <param name="prompt">The input text to complete</param>
+        /// <param name="textGenerationConfig">The text generation configuration</param>
+        /// <returns>The Command model response</returns>
+        public static async Task<CohereCommandResponse?> InvokeCommandV14(this AmazonBedrockRuntimeClient client, string prompt, Models.InferenceParameters.Cohere.TextGenerationConfig? textGenerationConfig = null)
         {
-            throw new NotImplementedException();
+            return await client.InvokeCommandV14(ModelIds.COHERE_COMMAND_TEXT_V14, prompt, textGenerationConfig);
+        }
+        
+        /// <summary>
+        /// Invoke Command Light v14 model for text completion
+        /// </summary>
+        /// <param name="client">The Amazon Bedrock Runtime client object</param>
+        /// <param name="prompt">The input text to complete</param>
+        /// <param name="textGenerationConfig">The text generation configuration</param>
+        /// <returns>The Command model response</returns>
+        public static async Task<CohereCommandResponse?> InvokeCommandLightV14(this AmazonBedrockRuntimeClient client, string prompt, Models.InferenceParameters.Cohere.TextGenerationConfig? textGenerationConfig = null)
+        {
+            return await client.InvokeCommandV14(ModelIds.COHERE_COMMAND_TEXT_LIGHT_V14, prompt, textGenerationConfig);
         }
         
         public static async Task<CohereEmbedEnglishResponse?> InvokeEmbedEnglishV3(this AmazonBedrockRuntimeClient client)

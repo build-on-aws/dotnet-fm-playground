@@ -6,28 +6,22 @@ namespace DotnetFMPlayground.Core.Models.InferenceParameters.AnthropicClaude;
 
 public class TextGenerationConfig
 {
-
     [Range(0f, 1f)]
-    [DefaultValue(0.5f)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonPropertyName("temperature")]
-    public float Temperature { get; init; } = 0.5f;
+    public float? Temperature { get; init; }
 
     [Range(0f, 1f)]
-    [DefaultValue(1f)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonPropertyName("top_p")]
-    public float TopP { get; init; } = 1f;
+    public float? TopP { get; init; }
 
     [Range(0, 500)]
-    [DefaultValue(250)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonPropertyName("top_k")] 
-    public int TopK { get; init; } = 250;
+    public int? TopK { get; init; }
 
     [Range(0, 4096)]
-    [DefaultValue(200)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     [JsonPropertyName("max_tokens_to_sample")]
     private int MaxTokensToSample { get; init; } = 200;
 

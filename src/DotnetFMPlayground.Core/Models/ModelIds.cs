@@ -21,7 +21,8 @@ namespace DotnetFMPlayground.Core.Models
             "cohere.command-text-v14",
             "ai21.j2-mid-v1",
             "ai21.j2-ultra-v1",
-            "anthropic.claude-v2:1"
+            "anthropic.claude-v2:1",
+            "cohere.command-light-text-v14"
         ];
 
         private static readonly IList<string> StreamingSupported =
@@ -51,6 +52,8 @@ namespace DotnetFMPlayground.Core.Models
         public static string AMAZON_TITAN_IMAGE_GENERATOR_G1_V1 => Ids[6];
 
         public static string COHERE_COMMAND_TEXT_V14 => Ids[7];
+        
+        public static string COHERE_COMMAND_TEXT_LIGHT_V14 => Ids[11];
 
         public static string AI21_LABS_JURASSIC_V2_MID_V1 => Ids[8];
 
