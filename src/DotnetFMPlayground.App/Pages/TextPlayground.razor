@@ -3,10 +3,9 @@
 @using Amazon.BedrockRuntime;
 @using Amazon.Bedrock;
 @using Amazon.Bedrock.Model;
-@using DotnetFMPlayground.Core.Models;
+@using Rockhead.Extensions;
 @using System.Text.Json;
-@using DotnetFMPlayground.Core.Models.InferenceParameters.AmazonTitanText
-@using TextGenerationConfig = DotnetFMPlayground.Core.Models.InferenceParameters.AI21LabsJurassic2.TextGenerationConfig
+@using DotnetFMPlayground.Core.Models;
 @inject AmazonBedrockRuntimeClient BedrockRuntimeClient
 @inject AmazonBedrockClient BedrockClient
 @inject IJSRuntime JS
@@ -63,7 +62,7 @@
     protected override async Task OnInitializedAsync()
     {
 
-        foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("TEXT") && ModelIds.IsSupported(x.ModelId));
+        foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("TEXT") && Model.IsSupported(x.ModelId));
         await base.OnInitializedAsync();
         StateHasChanged();
     }
@@ -75,95 +74,34 @@
 
         try
         {
-
-            if (selectedModel.ModelId == ModelIds.AMAZON_TITAN_TEXT_LITE_G1_V1)
+            Model model = Model.Parse(selectedModel.ModelId);
+            IFoundationModelResponse? response = null;
+            if (model is Model.TitanText)
             {
-                var response = await BedrockRuntimeClient.InvokeTitanTextG1Lite(new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
-                outputText = response?.GetResponse();
-                StateHasChanged();
+                response = await BedrockRuntimeClient.InvokeTitanTextG1Async((Model.TitanText)model, new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
             }
-            else if (selectedModel.ModelId == ModelIds.AMAZON_TITAN_TEXT_EXPRESS_G1_V1)
+            else if(model is Model.Jurassic2)
             {
-                var response = await BedrockRuntimeClient.InvokeTitanTextG1Express(new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
-                outputText = response?.GetResponse();
-                StateHasChanged();
+                response = await BedrockRuntimeClient.InvokeJurassic2Async((Model.Jurassic2)model, new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
             }
-            else if (selectedModel.ModelId == ModelIds.AI21_LABS_JURASSIC_V2_MID_V1)
+            else if(model is Model.Claude)
             {
-                var response = await BedrockRuntimeClient.InvokeJurassic2MidAsync(new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
-                outputText = response?.GetResponse();
-                StateHasChanged();
+                response = await BedrockRuntimeClient.InvokeClaudeAsync((Model.Claude)model, new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
             }
-            else if (selectedModel.ModelId == ModelIds.AI21_LABS_JURASSIC_V2_ULTRA_V1)
+            else if(model is Model.CommandText)
             {
-                var response = await BedrockRuntimeClient.InvokeJurassic2UltraAsync(new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
-                outputText = response?.GetResponse();
-                StateHasChanged();
+                response = await BedrockRuntimeClient.InvokeCommandV14Async((Model.CommandText)model, new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
             }
-            else if (selectedModel.ModelId == ModelIds.ANTHROPIC_CLAUDE_V1)
+            else if(model is Model.Llama)
             {
-                var response = await BedrockRuntimeClient.InvokeClaudeV1Async(new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
-                outputText = response?.GetResponse();
-                StateHasChanged();
+                response = await BedrockRuntimeClient.InvokeLlamaAsync((Model.Llama)model, new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
             }
-            else if (selectedModel.ModelId == ModelIds.ANTHROPIC_CLAUDE_V2)
+            else if(model is Model.Mistral)
             {
-                var response = await BedrockRuntimeClient.InvokeClaudeV2Async(new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
-                outputText = response?.GetResponse();
-                StateHasChanged();
+                response = await BedrockRuntimeClient.InvokeMistralAsync((Model.Mistral)model, new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
             }
-            else if (selectedModel.ModelId == ModelIds.ANTHROPIC_CLAUDE_V2_1)
-            {
-                var response = await BedrockRuntimeClient.InvokeClaudeV2_1Async(new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
-                outputText = response?.GetResponse();
-                StateHasChanged();
-            }
-            else if (selectedModel.ModelId == ModelIds.ANTHROPIC_CLAUDE_INSTANT_V1)
-            {
-                var response = await BedrockRuntimeClient.InvokeClaudeInstantV1Async(new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
-                outputText = response?.GetResponse();
-                StateHasChanged();
-            }
-            else if (selectedModel.ModelId == ModelIds.COHERE_COMMAND_TEXT_V14)
-            {
-                var response = await BedrockRuntimeClient.InvokeCommandV14(new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
-                outputText = response?.GetResponse();
-                StateHasChanged();
-            }
-            else if (selectedModel.ModelId == ModelIds.COHERE_COMMAND_TEXT_LIGHT_V14)
-            {
-                var response = await BedrockRuntimeClient.InvokeCommandLightV14(new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
-                outputText = response?.GetResponse();
-                StateHasChanged();
-            }
-            else if (!(selectedModel.ResponseStreamingSupported && ModelIds.IsStreamingSupported(selectedModel.ModelId)))
-            {
-                outputText = "Thinking...";
-                var response = await BedrockRuntimeClient.InvokeModelAsync(
-                    selectedModel.ModelId,
-                    prompt,
-                    new()
-                    {
-                        { "max_tokens_to_sample", 300 }
-                    }
-                );
-                outputText = response?.GetResponse();
-                StateHasChanged();
-            }
-            else
-            {
-                outputText = "";
-                await BedrockRuntimeClient.InvokeModelWithResponseStreamAsync(
-                    selectedModel.ModelId,
-                    prompt,
-                    new()
-                    {
-                        { "max_tokens_to_sample", 300 }
-                    },
-                    ChunkReceived,
-                    ExceptionReceived
-                );
-            }
+            outputText = response?.GetResponse();
+            StateHasChanged();
         }
         catch (Exception e)
         {

@@ -3,9 +3,10 @@
 @using System.Text;
 @using Amazon.Bedrock;
 @using Amazon.BedrockRuntime;
+@using Rockhead.Extensions;
+@using Rockhead.Extensions.Amazon;
+@using Rockhead.Extensions.StabilityAI;
 @using DotnetFMPlayground.Core.Models;
-@using DotnetFMPlayground.Core.Models.InferenceParameters.AmazonTitanImageGeneratorG1
-@using DotnetFMPlayground.Core.Models.ModelResponse
 @inject AmazonBedrockRuntimeClient BedrockRuntimeClient
 @inject AmazonBedrockClient BedrockClient
 @inject IJSRuntime JS
@@ -62,7 +63,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("IMAGE") && ModelIds.IsSupported(x.ModelId));
+        foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("IMAGE") && Model.IsSupported(x.ModelId));
         selectedModel = foundationModels.FirstOrDefault();
         await base.OnInitializedAsync();
         StateHasChanged();
@@ -76,31 +77,21 @@
             new PromptItem(PromptItemType.User, userPrompt.Prompt)
         ];
 
-        if (selectedModel.ModelId == "amazon.titan-image-generator-v1")
-        {   
-            AmazonTitanImageGeneratorG1Response response = await BedrockRuntimeClient.InvokeTitanImageGeneratorG1ForTextToImageAsync(
-                new TextToImageParams()
-                {
+        Model model = Model.Parse(selectedModel.ModelId);
+        if(model is Model.TitanImageGeneratorV1)
+        {
+            var response = await BedrockRuntimeClient.InvokeTitanImageGeneratorG1ForTextToImageAsync(new TitanImageTextToImageParams()
+            {
                     Text = new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString()
-                },
-                new ImageGenerationConfig()
-                {
-                    NumberOfImages = 1,
-                    CfgScale = 8.0f,
-                    Height = 512,
-                    Width = 512,
-                    Quality = ImageGenerationConfig.ImageQuality.Standard,
-                    Seed = 10
-                });
+            });
             imageSrc = $"data:image/jpeg;base64,{(object)response?.Images?.FirstOrDefault()}";
         }
-        else if (selectedModel.ModelId == ModelIds.STABILITY_AI_STABLE_DIFFUSION_XL_V0)
+        else if(model is Model.StableDiffusionXl)
         {
-            StableDiffusionXLResponse response = await BedrockRuntimeClient.InvokeStabilityAIStableDiffusionXLv1ForTextToImageAsync(
-                new Core.Models.InferenceParameters.StabilityAIStableDiffusionXL.TextToImageParams
+            var response = await BedrockRuntimeClient.InvokeStableDiffusionXlForTextToImageAsync((Model.StableDiffusionXl)model, new StableDiffusionTextToImageParams()
                 {
-                    TextPrompts = new []{ new Core.Models.InferenceParameters.StabilityAIStableDiffusionXL.TextToImageParams.TextPrompt() { Text = new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString()}},
-                });
+                    TextPrompts = new StableDiffusionTextToImageParams.TextPrompt[] { new StableDiffusionTextToImageParams.TextPrompt() { Text = new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString() } }
+                }); 
             imageSrc = $"data:image/jpeg;base64,{(object)response?.Artifacts?.FirstOrDefault()?.Base64}";
         }
         StateHasChanged();
