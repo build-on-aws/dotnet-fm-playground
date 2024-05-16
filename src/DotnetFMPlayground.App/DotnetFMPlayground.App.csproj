@@ -77,7 +77,7 @@
         <PackageReference Include="Blazor.SpeechSynthesis" Version="8.0.0" />
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
         <PackageReference Include="MudBlazor" Version="6.11.1" />
-        <PackageReference Include="Rockhead.Extensions" Version="0.1.4-preview" />
+        <PackageReference Include="Rockhead.Extensions" Version="0.1.5-preview" />
     </ItemGroup>
 
     <ItemGroup>
