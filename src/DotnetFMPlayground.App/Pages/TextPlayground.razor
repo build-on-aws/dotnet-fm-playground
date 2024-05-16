@@ -6,6 +6,7 @@
 @using Rockhead.Extensions;
 @using System.Text.Json;
 @using DotnetFMPlayground.Core.Models;
+@using Rockhead.Extensions.Anthropic
 @inject AmazonBedrockRuntimeClient BedrockRuntimeClient
 @inject AmazonBedrockClient BedrockClient
 @inject IJSRuntime JS
@@ -14,16 +15,29 @@
 <MudStack>
     <MudCard>
         <MudCardContent>
-            <MudSelect T="FoundationModelSummary" @bind-Value="selectedModel" ToStringFunc="@selectConverter" Required="true">
+            <MudSelect T="FoundationModelSummary" Value="@selectedModel" ValueChanged="@OnSelectedModelChanged" ToStringFunc="@selectConverter" Required="true">
                 @if (foundationModels != null)
                 {
                     foreach (var item in foundationModels)
                     {
-                        selectedModel ??= item;
                         <MudSelectItem Value="@item" />
                     }
                 }
             </MudSelect>
+            <MudCardActions>
+                @if(PromptFormatAvailable())
+                {
+                    <MudButton Class="ma-2" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Article" Color="Color.Primary" OnClick="OnAddTemplate">Prompt Format Template</MudButton>
+                }
+                @if (MessagesAPIAvailable())
+                {
+                    <MudSwitch Class="ma-2" @bind-Checked="_messagesAPI" Label="Messages API" T="bool" Color="Color.Primary"></MudSwitch>
+                }
+                @if (_model != null && _model.StreamingSupported)
+                {
+                    <MudSwitch Class="ma-2" Checked="@_streaming" Label="Reponse streaming" T="bool" CheckedChanged="@OnCheckedChanged" Color="Color.Primary"></MudSwitch>
+                }
+            </MudCardActions>
         </MudCardContent>
     </MudCard>
     <EditForm Model="@userPrompt" OnSubmit="OnSubmit">
@@ -53,55 +67,109 @@
 
     private FoundationModelSummary selectedModel;
 
+    private Model _model;
+
     private UserPrompt userPrompt = new UserPrompt();
 
     private string outputText;
 
     Func<FoundationModelSummary, string> selectConverter = fms => fms == null ? "" : String.Concat(fms?.ModelName, " (", fms?.ModelId, ")");
 
+    private bool _streaming = false;
+
+    private bool _messagesAPI = false;
+
     protected override async Task OnInitializedAsync()
     {
 
         foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("TEXT") && Model.IsSupported(x.ModelId));
+        selectedModel = foundationModels.FirstOrDefault();
+        UpdateModel();
         await base.OnInitializedAsync();
-        StateHasChanged();
     }
+
+    private void OnSelectedModelChanged(FoundationModelSummary model)
+    {
+        selectedModel = model;
+        UpdateModel();
+        outputText = string.Empty;
+    }
+
+    private void UpdateModel()
+    {
+        _model = Model.Parse(selectedModel.ModelId);
+        _streaming = false;
+        _messagesAPI = false;
+    }
+
+    private void OnCheckedChanged(bool value)
+    {
+        _streaming = value;
+    }
+
+    private void OnAddTemplate(MouseEventArgs evt)
+    {
+        userPrompt.Prompt = GetPromptFormat();
+    }
+
+    private const string _claudeTextGenerationTemplate = "Human: {{user_message}}\n\nAssistant:";
+    private const string _llama2ChatPromptTemplate = "<s>\n[INST]\n<<SYS>>\n{{ system_prompt }}\n<</SYS>>\n{{ user_message }}\n[/INST]";
+    private const string _llama3InstructPromptTemplate = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>{{ system_prompt }}<|eot_id|>\n<|start_header_id|>user<|end_header_id|>{{ user_message }}<|eot_id|>\n<|start_header_id|>assistant<|end_header_id|>";
+    private const string _mistralInstructTemplate = "<s>[INST]{{ user_message }}[/INST]";
+    private string GetPromptFormat() =>
+        _model switch
+        {
+            Model.ClaudeTextCompletionSupport => _claudeTextGenerationTemplate,
+            Model.Llama213BChatV1 => _llama2ChatPromptTemplate,
+            Model.Llama270BChatV1 => _llama2ChatPromptTemplate,
+            Model.Llama38BInstructV1 => _llama3InstructPromptTemplate,
+            Model.Llama370BInstructV1 => _llama3InstructPromptTemplate,
+            Model.Mistral => _mistralInstructTemplate,
+            _ => string.Empty
+        };
+
+    private bool PromptFormatAvailable() =>
+        _model switch
+        {
+            Model.ClaudeTextCompletionSupport => true,
+            Model.Llama213BChatV1 => true,
+            Model.Llama270BChatV1 => true,
+            Model.Llama38BInstructV1 => true,
+            Model.Llama370BInstructV1 => true,
+            Model.Mistral => true,
+            _ => false
+        };
+
+    private bool MessagesAPIAvailable() =>
+    _model switch
+    {
+        Model.ClaudeTextCompletionSupport => true,
+        _ => false
+    };
 
     private async Task OnSubmit(EditContext context)
     {
+        outputText = string.Empty;
         Prompt prompt = new();
         prompt.Add(new PromptItem(PromptItemType.User, userPrompt.Prompt));
 
         try
         {
-            Model model = Model.Parse(selectedModel.ModelId);
-            IFoundationModelResponse? response = null;
-            if (model is Model.TitanText)
+            if(_model.StreamingSupported && _streaming)
             {
-                response = await BedrockRuntimeClient.InvokeTitanTextG1Async((Model.TitanText)model, new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
+                await foreach(var chunk in InvokeModelWithStreamingAsync(prompt))
+                {
+                    outputText += chunk;
+                    StateHasChanged();
+                    await JS.InvokeVoidAsync("scrollToElement", "ResponseField");
+                }
             }
-            else if(model is Model.Jurassic2)
+            else
             {
-                response = await BedrockRuntimeClient.InvokeJurassic2Async((Model.Jurassic2)model, new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
+                outputText = await InvokeModelAsync(prompt);
+                StateHasChanged();
+                await JS.InvokeVoidAsync("scrollToElement", "ResponseField");
             }
-            else if(model is Model.Claude)
-            {
-                response = await BedrockRuntimeClient.InvokeClaudeAsync((Model.Claude)model, new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
-            }
-            else if(model is Model.CommandText)
-            {
-                response = await BedrockRuntimeClient.InvokeCommandV14Async((Model.CommandText)model, new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
-            }
-            else if(model is Model.Llama)
-            {
-                response = await BedrockRuntimeClient.InvokeLlamaAsync((Model.Llama)model, new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
-            }
-            else if(model is Model.Mistral)
-            {
-                response = await BedrockRuntimeClient.InvokeMistralAsync((Model.Mistral)model, new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString());
-            }
-            outputText = response?.GetResponse();
-            StateHasChanged();
         }
         catch (Exception e)
         {
@@ -110,24 +178,92 @@
         }
     }
 
-    private async Task ChunkReceived(string? chunk)
+    private async Task<string?> InvokeModelAsync(Prompt prompt)
     {
-        await InvokeAsync(async () =>
+        Model model = Model.Parse(selectedModel.ModelId);
+        IFoundationModelResponse? response = null;
+        string textPrompt = new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString();
+        if (model is Model.TitanText)
         {
-            outputText += chunk;
-            StateHasChanged();
-            await JS.InvokeVoidAsync("scrollToElement", "ResponseField");
-        });
+            response = await BedrockRuntimeClient.InvokeTitanTextG1Async((Model.TitanText)model, textPrompt);
+        }
+        else if(model is Model.Jurassic2)
+        {
+            response = await BedrockRuntimeClient.InvokeJurassic2Async((Model.Jurassic2)model, textPrompt);
+        }
+        else if(model is Model.ClaudeTextCompletionSupport && !_messagesAPI)
+        {
+            response = await BedrockRuntimeClient.InvokeClaudeAsync((Model.Claude)model, textPrompt);
+        }
+        else if(model is Model.Claude)
+        {
+            ClaudeMessage message = new ClaudeMessage() { Role = "user", Content = new[] { new ClaudeTextContent() { Text = textPrompt } } };
+            response = await BedrockRuntimeClient.InvokeClaudeMessagesAsync((Model.Claude)model, message);
+        }
+        else if(model is Model.CommandText)
+        {
+            response = await BedrockRuntimeClient.InvokeCommandV14Async((Model.CommandText)model, textPrompt);
+        }
+        else if(model is Model.Llama)
+        {
+            response = await BedrockRuntimeClient.InvokeLlamaAsync((Model.Llama)model, textPrompt);
+        }
+        else if(model is Model.Mistral)
+        {
+            response = await BedrockRuntimeClient.InvokeMistralAsync((Model.Mistral)model, textPrompt);
+        }
+        return response?.GetResponse();
     }
 
-    private async Task ExceptionReceived(string? message)
+    private async IAsyncEnumerable<string?> InvokeModelWithStreamingAsync(Prompt prompt)
     {
-        System.Diagnostics.Debug.WriteLine("ExceptionReceived");
-        await InvokeAsync(() =>
+        Model model = Model.Parse(selectedModel.ModelId);
+        IFoundationModelResponse? response = null;
+        string textPrompt = new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString();
+        if (model is Model.TitanText)
         {
-            outputText += message;
-            StateHasChanged();
-        });
+            await foreach (var chunk in BedrockRuntimeClient.InvokeTitanTextG1WithResponseStreamAsync((Model.TitanText)model, textPrompt))
+            {
+                yield return chunk.GetResponse();
+            }
+        }
+        else if (model is Model.ClaudeTextCompletionSupport && !_messagesAPI)
+        {
+            await foreach (var chunk in BedrockRuntimeClient.InvokeClaudeWithResponseStreamAsync((Model.Claude)model, textPrompt))
+            {
+                yield return chunk.GetResponse();
+            }
+        }
+        else if (model is Model.Claude)
+        {
+            ClaudeMessage message = new ClaudeMessage() { Role = "user", Content = new[] { new ClaudeTextContent() { Text = textPrompt } } };
+            await foreach (var chunk in BedrockRuntimeClient.InvokeClaudeMessagesWithResponseStreamAsync((Model.Claude)model, message))
+            {
+                yield return chunk.GetResponse();
+            }
+        }
+        else if (model is Model.CommandText)
+        {
+            await foreach (var chunk in BedrockRuntimeClient.InvokeCommandV14WithResponseStreamAsync((Model.CommandText)model, textPrompt))
+            {
+                yield return chunk.GetResponse();
+            }
+        }
+        else if (model is Model.Llama)
+        {
+            await foreach (var chunk in BedrockRuntimeClient.InvokeLlamaWithResponseStreamAsync((Model.Llama)model, textPrompt))
+            {
+                yield return chunk.GetResponse();
+            }
+        }
+        else if (model is Model.Mistral)
+        {
+            await foreach (var chunk in BedrockRuntimeClient.InvokeMistralWithResponseStreamAsync((Model.Mistral)model, textPrompt))
+            {
+                yield return chunk.GetResponse();
+            }
+        }
     }
+
 }
 
