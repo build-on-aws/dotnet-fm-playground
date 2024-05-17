@@ -1,0 +1,437 @@
+﻿@using Amazon.Bedrock;
+@using Amazon.Bedrock.Model;
+@using Rockhead.Extensions
+@using Rockhead.Extensions.Amazon;
+@using Rockhead.Extensions.Anthropic;
+@using Rockhead.Extensions.AI21Labs;
+@using Rockhead.Extensions.Cohere;
+@using Rockhead.Extensions.Meta;
+@using Rockhead.Extensions.MistralAI;
+@inject AmazonBedrockClient BedrockClient
+@inherits MudComponentBase;
+
+<MudPaper Class="pa-2">
+    <MudSelect Class="ma-2" T="FoundationModelSummary" Value="@_selectedModel" ValueChanged="@OnSelectedModelChanged" ToStringFunc="@_selectConverter" Required="true">
+        @if (_foundationModels != null)
+        {
+            foreach (var item in _foundationModels)
+            {
+                <MudSelectItem Value="@item" />
+            }
+        }
+    </MudSelect>
+    <MudStack Class="ma-2" Row="true">
+        @if (PromptFormatAvailable())
+        {
+            <MudButton Class="ma-2" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Article" Color="Color.Primary" OnClick="OnPromptFormatTemplateClick">Prompt Format Template</MudButton>
+        }
+        @if (MessagesAPIAvailable())
+        {
+            <MudSwitch Class="ma-2" Checked="@_messagesAPI" Label="Messages API" T="bool" CheckedChanged="@OnMessagesAPICheckedChanged" Color="Color.Primary"></MudSwitch>
+        }
+        @if (_model != null && _model.StreamingSupported)
+        {
+            <MudSwitch Class="ma-2" Checked="@_streaming" Label="Reponse streaming" T="bool" CheckedChanged="@OnCheckedChanged" Color="Color.Primary"></MudSwitch>
+        }
+    </MudStack>
+    @if (_model != null && _model is Model.Claude)
+    {
+        <ClaudeInferenceParameters @ref="_inferenceParametersBase" Class="ma-2"></ClaudeInferenceParameters>
+    }
+    else if (_model != null && _model is Model.TitanText)
+    {
+        <TitanTextInferenceParameters @ref="_inferenceParametersBase" Class="ma-2"></TitanTextInferenceParameters>
+    }
+    else if (_model != null && _model is Model.Jurassic2)
+    {
+        <Jurassic2TextInferenceParameters @ref="_inferenceParametersBase" Class="ma-2"></Jurassic2TextInferenceParameters>
+    }
+    else if (_model != null && _model is Model.CommandText)
+    {
+        <CommandTextInferenceParameters @ref="_inferenceParametersBase" Class="ma-2"></CommandTextInferenceParameters>
+    }
+    else if (_model != null && _model is Model.Llama)
+    {
+        <LlamaTextInferenceParameters @ref="_inferenceParametersBase" Class="ma-2"></LlamaTextInferenceParameters>
+    }
+    else if (_model != null && _model is Model.Mistral)
+    {
+        <MistralTextInferenceParameters @ref="_inferenceParametersBase" Class="ma-2"></MistralTextInferenceParameters>
+    }
+</MudPaper>
+
+@code {
+    private IEnumerable<FoundationModelSummary> _foundationModels;
+
+    private FoundationModelSummary _selectedModel;
+
+    private Func<FoundationModelSummary, string> _selectConverter = fms => fms == null ? "" : String.Concat(fms?.ModelName, " (", fms?.ModelId, ")");
+
+    private Model _model;
+
+    private bool _streaming = false;
+
+    private bool _messagesAPI = false;
+
+    private InferenceParametersBase? _inferenceParametersBase = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("TEXT") && Model.IsSupported(x.ModelId));
+        _selectedModel = _foundationModels.FirstOrDefault();
+        await UpdateModel();
+        await base.OnParametersSetAsync();
+    }
+
+    private bool MessagesAPIAvailable() =>
+    _model switch
+    {
+        Model.ClaudeTextCompletionSupport => true,
+        _ => false
+    };
+
+    private bool PromptFormatAvailable() =>
+    _model switch
+    {
+        Model.ClaudeTextCompletionSupport => true,
+        Model.Llama213BChatV1 => true,
+        Model.Llama270BChatV1 => true,
+        Model.Llama38BInstructV1 => true,
+        Model.Llama370BInstructV1 => true,
+        Model.Mistral => true,
+        _ => false
+    };
+
+    private const string _claudeTextGenerationTemplate = "Human: {{user_message}}\n\nAssistant:";
+    private const string _llama2ChatPromptTemplate = "<s>\n[INST]\n<<SYS>>\n{{ system_prompt }}\n<</SYS>>\n{{ user_message }}\n[/INST]";
+    private const string _llama3InstructPromptTemplate = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>{{ system_prompt }}<|eot_id|>\n<|start_header_id|>user<|end_header_id|>{{ user_message }}<|eot_id|>\n<|start_header_id|>assistant<|end_header_id|>";
+    private const string _mistralInstructTemplate = "<s>[INST]{{ user_message }}[/INST]";
+    private string GetPromptFormat() =>
+        _model switch
+        {
+            Model.ClaudeTextCompletionSupport => _claudeTextGenerationTemplate,
+            Model.Llama213BChatV1 => _llama2ChatPromptTemplate,
+            Model.Llama270BChatV1 => _llama2ChatPromptTemplate,
+            Model.Llama38BInstructV1 => _llama3InstructPromptTemplate,
+            Model.Llama370BInstructV1 => _llama3InstructPromptTemplate,
+            Model.Mistral => _mistralInstructTemplate,
+            _ => string.Empty
+        };
+
+    [Parameter] public EventCallback<string> OnAddPromptFormat { get; set; }
+
+    private async Task OnPromptFormatTemplateClick(MouseEventArgs evt)
+    {
+        await OnAddPromptFormat.InvokeAsync(GetPromptFormat());
+    }
+
+    [Parameter] public EventCallback<Model> OnModelChanged { get; set; }
+
+    private async Task OnSelectedModelChanged(FoundationModelSummary model)
+    {
+        _selectedModel = model;
+        await UpdateModel();
+    }
+
+    private async Task UpdateModel()
+    {
+        _model = Model.Parse(_selectedModel.ModelId);
+        _streaming = false;
+        _messagesAPI = false;
+        await OnModelChanged.InvokeAsync(_model);
+    }
+
+    [Parameter] public EventCallback<bool> OnStreamingChanged { get; set; }
+
+    private async Task OnCheckedChanged(bool value)
+    {
+        _streaming = value;
+        await OnStreamingChanged.InvokeAsync(_streaming);
+    }
+
+    [Parameter] public EventCallback<bool> OnMessagesAPIChanged { get; set; }
+
+    private async Task OnMessagesAPICheckedChanged(bool value)
+    {
+        _messagesAPI = value;
+        await OnMessagesAPIChanged.InvokeAsync(_messagesAPI);
+    }
+
+    public ClaudeTextGenerationConfig? GetClaudeTextGenerationConfig()
+    {
+        if (_inferenceParametersBase != null && 
+            (_inferenceParametersBase.InferenceParameters.ContainsKey("temperature")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("top_p")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("top_k")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("max_tokens_to_sample")))
+        {
+            float? temperature = null;
+            float? topP = null;
+            int? topK = null;
+            int maxTokensToSample = 200;
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("temperature"))
+            {
+                temperature = (float)_inferenceParametersBase.InferenceParameters["temperature"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("top_p"))
+            {
+                topP = (float)_inferenceParametersBase.InferenceParameters["top_p"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("top_k"))
+            {
+                topK = (int)_inferenceParametersBase.InferenceParameters["top_k"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("max_tokens_to_sample"))
+            {
+                maxTokensToSample = (int)_inferenceParametersBase.InferenceParameters["max_tokens_to_sample"];
+            }
+            return new ClaudeTextGenerationConfig()
+                {
+                    Temperature = temperature,
+                    TopP = topP,
+                    TopK = topK,
+                    MaxTokensToSample = maxTokensToSample
+                };
+        }
+        else
+        {
+            return null;
+        }
+
+    }
+
+    public ClaudeMessagesConfig? GetClaudeMessagesConfig()
+    {
+        if (_inferenceParametersBase != null &&
+            (_inferenceParametersBase.InferenceParameters.ContainsKey("temperature")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("top_p")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("top_k")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("max_tokens_to_sample")))
+        {
+
+            float? temperature = null;
+            float? topP = null;
+            int? topK = null;
+            int maxTokensToSample = 200;
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("temperature"))
+            {
+                temperature = (float)_inferenceParametersBase.InferenceParameters["temperature"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("top_p"))
+            {
+                topP = (float)_inferenceParametersBase.InferenceParameters["top_p"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("top_k"))
+            {
+                topK = (int)_inferenceParametersBase.InferenceParameters["top_k"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("max_tokens_to_sample"))
+            {
+                maxTokensToSample = (int)_inferenceParametersBase.InferenceParameters["max_tokens_to_sample"];
+            }
+            return new ClaudeMessagesConfig()
+                {
+                    Temperature = temperature,
+                    TopP = topP,
+                    TopK = topK,
+                    MaxTokens = maxTokensToSample
+                };
+        }
+        else
+        {
+            return null;
+        }
+    }
+
+    public TitanTextGenerationConfig? GetTitanTextGenerationConfig()
+    {
+        if (_inferenceParametersBase != null &&
+            (_inferenceParametersBase.InferenceParameters.ContainsKey("temperature")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("topP")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("topK")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("maxTokenCount")))
+        {
+
+            float? temperature = null;
+            float? topP = null;
+            int maxTokensToSample = 512;
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("temperature"))
+            {
+                temperature = (float)_inferenceParametersBase.InferenceParameters["temperature"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("topP"))
+            {
+                topP = (float)_inferenceParametersBase.InferenceParameters["topP"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("maxTokenCount"))
+            {
+                maxTokensToSample = (int)_inferenceParametersBase.InferenceParameters["maxTokenCount"];
+            }
+            return new TitanTextGenerationConfig()
+                {
+                    Temperature = temperature ?? 0,
+                    TopP = topP ?? 1,
+                    MaxTokenCount = maxTokensToSample
+                };
+        }
+        else
+        {
+            return null;
+        }
+    }
+
+    public Jurassic2TextGenerationConfig? GetJurassic2TextGenerationConfig()
+    {
+        if (_inferenceParametersBase != null &&
+            (_inferenceParametersBase.InferenceParameters.ContainsKey("temperature")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("topP")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("maxTokenCount")))
+        {
+            float? temperature = null;
+            float? topP = null;
+            int maxTokensToSample = 512;
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("temperature"))
+            {
+                temperature = (float)_inferenceParametersBase.InferenceParameters["temperature"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("topP"))
+            {
+                topP = (float)_inferenceParametersBase.InferenceParameters["topP"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("maxTokenCount"))
+            {
+                maxTokensToSample = (int)_inferenceParametersBase.InferenceParameters["maxTokenCount"];
+            }
+            return new Jurassic2TextGenerationConfig()
+            {
+                Temperature = temperature ?? 0,
+                TopP = topP ?? 1,
+                MaxTokens = maxTokensToSample
+            };
+        }
+        else
+        {
+            return null;
+        }
+    }
+
+    public CommandTextGenerationConfig? GetCommandTextGenerationConfig()
+    {
+        if (_inferenceParametersBase != null &&
+            (_inferenceParametersBase.InferenceParameters.ContainsKey("temperature")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("top_p")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("top_k")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("max_tokens_to_sample")))
+        {
+            float? temperature = null;
+            float? topP = null;
+            int? topK = null;
+            int? maxTokensToSample = null;
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("temperature"))
+            {
+                temperature = (float)_inferenceParametersBase.InferenceParameters["temperature"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("top_p"))
+            {
+                topP = (float)_inferenceParametersBase.InferenceParameters["top_p"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("top_k"))
+            {
+                topK = (int)_inferenceParametersBase.InferenceParameters["top_k"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("max_tokens_to_sample"))
+            {
+                maxTokensToSample = (int)_inferenceParametersBase.InferenceParameters["max_tokens_to_sample"];
+            }
+            return new CommandTextGenerationConfig()
+                {
+                    Temperature = temperature,
+                    P = topP,
+                    K = topK,
+                    MaxTokens = maxTokensToSample
+                };
+        }
+        else
+        {
+            return null;
+        }
+    }
+
+    public LlamaTextGenerationConfig? GetLlamaTextGenerationConfig()
+    {
+        if (_inferenceParametersBase != null &&
+    (_inferenceParametersBase.InferenceParameters.ContainsKey("temperature")
+     || _inferenceParametersBase.InferenceParameters.ContainsKey("topP")
+     || _inferenceParametersBase.InferenceParameters.ContainsKey("topK")
+     || _inferenceParametersBase.InferenceParameters.ContainsKey("maxTokenCount")))
+        {
+            float? temperature = null;
+            float? topP = null;
+            int maxTokensToSample = 200;
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("temperature"))
+            {
+                temperature = (float)_inferenceParametersBase.InferenceParameters["temperature"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("topP"))
+            {
+                topP = (float)_inferenceParametersBase.InferenceParameters["topP"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("maxTokenCount"))
+            {
+                maxTokensToSample = (int)_inferenceParametersBase.InferenceParameters["maxTokenCount"];
+            }
+            return new LlamaTextGenerationConfig()
+                {
+                    Temperature = temperature ?? 0,
+                    TopP = topP ?? 1,
+                    MaxGenLen = maxTokensToSample
+                };
+        }
+        else
+        {
+            return null;
+        }
+    }
+
+    public MistralTextGenerationConfig? GetMistralTextGenerationConfig()
+    {
+        if (_inferenceParametersBase != null &&
+            (_inferenceParametersBase.InferenceParameters.ContainsKey("temperature")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("top_p")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("top_k")
+             || _inferenceParametersBase.InferenceParameters.ContainsKey("max_tokens_to_sample")))
+        {
+            float? temperature = null;
+            float? topP = null;
+            int? topK = null;
+            int? maxTokensToSample = null;
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("temperature"))
+            {
+                temperature = (float)_inferenceParametersBase.InferenceParameters["temperature"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("top_p"))
+            {
+                topP = (float)_inferenceParametersBase.InferenceParameters["top_p"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("top_k"))
+            {
+                topK = (int)_inferenceParametersBase.InferenceParameters["top_k"];
+            }
+            if (_inferenceParametersBase.InferenceParameters.ContainsKey("max_tokens_to_sample"))
+            {
+                maxTokensToSample = (int)_inferenceParametersBase.InferenceParameters["max_tokens_to_sample"];
+            }
+            return new MistralTextGenerationConfig()
+                {
+                    Temperature = temperature,
+                    TopP = topP,
+                    TopK = topK,
+                    MaxTokens = maxTokensToSample
+                };
+        }
+        else
+        {
+            return null;
+        }
+    }
+}
