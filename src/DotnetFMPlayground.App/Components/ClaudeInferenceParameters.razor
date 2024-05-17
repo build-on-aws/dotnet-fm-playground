@@ -1,0 +1,51 @@
+﻿@inherits InferenceParametersBase
+
+<MudStack Row="true">
+    <MudNumericField Class="ma-2" Label="Temperature" Format="N2" T="float?" Min="0f" Max="1f" Step="0.01f" Value="@_temperature" ValueChanged="OnTemperatureChanged"></MudNumericField>
+    <MudNumericField Class="ma-2" Label="Top P" Format="N2" T="float?" Min="0f" Max="1f" Step="0.01f" Value="@_topP" ValueChanged="OnTopPChanged"></MudNumericField>
+    <MudNumericField Class="ma-2" Label="Top K" Format="N0" T="int?" Min="0" Max="500" Step="1" Value="@_topK" ValueChanged="OnTopKChanged"></MudNumericField>
+    <MudNumericField Class="ma-2" Label="Max tokens to sample" Format="N0" T="int?" Min="0" Max="4096" Step="1" Value="@_maxTokensToSample" ValueChanged="OnTopMaxTokensToSampleChanged"></MudNumericField>
+</MudStack>
+
+@code {
+    private float? _temperature { get; set; } = null;
+    private float? _topP { get; set; } = null;
+    private int? _topK { get; set; } = null;
+    private int? _maxTokensToSample { get; set; } = null;
+
+    private void OnTemperatureChanged(float? value)
+    {
+        if(value is not null)
+        {
+            _temperature = value;
+            InferenceParameters["temperature"] = value;
+        }
+    }
+
+    private void OnTopPChanged(float? value)
+    {
+        if (value is not null)
+        {
+            _topP = value;
+            InferenceParameters["top_p"] = value;
+        }
+    }
+
+    private void OnTopKChanged(int? value)
+    {
+        if (value is not null)
+        {
+            _topK = value;
+            InferenceParameters["top_k"] = value;
+        }
+    }
+
+    private void OnTopMaxTokensToSampleChanged(int? value)
+    {
+        if (value is not null)
+        {
+            _maxTokensToSample = value;
+            InferenceParameters["max_tokens_to_sample"] = value;
+        }
+    }
+}
