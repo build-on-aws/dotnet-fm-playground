@@ -139,6 +139,8 @@
         _streaming = false;
         _messagesAPI = false;
         await OnModelChanged.InvokeAsync(_model);
+        await StreamingChanged();
+        await MessagesAPIChanged();
     }
 
     [Parameter] public EventCallback<bool> OnStreamingChanged { get; set; }
@@ -146,6 +148,11 @@
     private async Task OnCheckedChanged(bool value)
     {
         _streaming = value;
+        await StreamingChanged();
+    }
+
+    private async Task StreamingChanged()
+    {
         await OnStreamingChanged.InvokeAsync(_streaming);
     }
 
@@ -154,6 +161,11 @@
     private async Task OnMessagesAPICheckedChanged(bool value)
     {
         _messagesAPI = value;
+        await MessagesAPIChanged();
+    }
+
+    private async Task MessagesAPIChanged()
+    {
         await OnMessagesAPIChanged.InvokeAsync(_messagesAPI);
     }
 

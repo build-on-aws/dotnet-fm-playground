@@ -3,79 +3,72 @@
 @using Amazon.Bedrock;
 @using Amazon.BedrockRuntime;
 @using System.Text;
+@using DotnetFMPlayground.App.Components
 @using DotnetFMPlayground.Core.Models;
+@using Rockhead.Extensions
+@using Rockhead.Extensions.Anthropic
 @inject AmazonBedrockRuntimeClient BedrockRuntimeClient
 @inject AmazonBedrockClient BedrockClient
 @inject IJSRuntime JS
 
 <MudText Typo="Typo.h3">Chat Playground</MudText>
 <MudStack>
+    <ModelConfigurator @ref="_modelConfigurator" OnAddPromptFormat="OnAddPromptFormat" OnModelChanged="OnSelectedModelChanged" OnStreamingChanged="OnStreamingChanged" OnMessagesAPIChanged="OnMessagesAPIChanged"></ModelConfigurator>
     <MudCard>
         <MudCardContent>
-            <MudSelect T="FoundationModelSummary" @bind-Value="selectedModel" ToStringFunc="@selectConverter" Required="true">
-                @if (foundationModels != null)
-                {
-                    foreach (var item in foundationModels)
-                    {
-                        selectedModel ??= item;
-                        <MudSelectItem Value="@item" />
-                    }
-                }
-            </MudSelect>
-        </MudCardContent>
-    </MudCard>
-<MudCard>
-    <MudCardContent>
-        <MudTimeline Reverse=true>
-        @foreach (var item in promptItems)
-        {
-            string label = item.Type == PromptItemType.User ? "Human" : "Assistant";
+            <MudTimeline Reverse=true>
+            @foreach (var item in promptItems)
+            {
+                string label = item.Type == PromptItemType.User ? "Human" : "Assistant";
+                <MudTimelineItem>
+                    <MudField Label="@label" Class="white-space-pre-line">@item.Prompt</MudField>
+                </MudTimelineItem>
+            }
             <MudTimelineItem>
-                <MudField Label="@label" Class="white-space-pre-line">@item.Prompt</MudField>
+            <MudTextField id="PromptId" @ref="promptField" T="string" ValueChanged="@OnPromptChanged" Label="Human"></MudTextField>
             </MudTimelineItem>
-        }
-        <MudTimelineItem>
-        <MudTextField id="PromptId" @ref="promptField" T="string" ValueChanged="@OnPromptChanged" Label="Human"></MudTextField>
-        </MudTimelineItem>
-    </MudTimeline>
-    </MudCardContent>
-    <MudCardActions>
-            <MudButton Class="ml-auto" Disabled="@isThinking" Variant="Variant.Filled" Color="Color.Primary" OnClick="Reset">
-            @if (isThinking)
-                {
-                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
-                    <MudText Class="ms-2">Thinking...</MudText>
-                }
-                else
-                {
-                    <MudIcon Class="ms-n1" Icon="@Icons.Material.Filled.Replay" Size="Size.Small"></MudIcon>
-                    <MudText Class="ms-2">Reset</MudText>
-                }
-        </MudButton>
-    </MudCardActions>
-</MudCard>
+        </MudTimeline>
+        </MudCardContent>
+        <MudCardActions>
+                <MudButton Class="ml-auto" Disabled="@isThinking" Variant="Variant.Filled" Color="Color.Primary" OnClick="Reset">
+                @if (isThinking)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Thinking...</MudText>
+                    }
+                    else
+                    {
+                        <MudIcon Class="ms-n1" Icon="@Icons.Material.Filled.Replay" Size="Size.Small"></MudIcon>
+                        <MudText Class="ms-2">Reset</MudText>
+                    }
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
 </MudStack>
 
 
 @code {
+
+    #region MODEL_CONFIGURATION_FIELDS
+    private ModelConfigurator _modelConfigurator;
+
+    private Model _model;
+
+    private bool _streaming = false;
+
+    private bool _messagesAPI = false;
+    #endregion
+
+
+
+
+
     private MudTextField<string> promptField; 
 
     private ICollection<PromptItem> promptItems = new List<PromptItem>();
 
-    private IEnumerable<FoundationModelSummary> foundationModels;
-
-    private FoundationModelSummary selectedModel;
-
     private bool isThinking = false;
 
-    Func<FoundationModelSummary, string> selectConverter = fms => fms == null ? "" : String.Concat(fms?.ModelName, " (", fms?.ModelId, ")");
-
-    protected override async Task OnInitializedAsync()
-    {
-        foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("TEXT") && ModelIds.IsSupported(x.ModelId));
-        await base.OnInitializedAsync();
-        StateHasChanged();
-    }
 
     private async Task Reset(MouseEventArgs e)
     {
@@ -95,24 +88,299 @@
         // at this point, you don't want to add newUserPrompt to the PromptItems collection because it would update the display while we don't have yet 
         // the assistant answer
         PromptItem newUserPrompt = new(PromptItemType.User, inputValue);
-        prompt.Add(newUserPrompt); 
+        prompt.Add(newUserPrompt);
 
-        var response = await BedrockRuntimeClient.InvokeModelAsync(
-            selectedModel.ModelId,
-            prompt,
-            new()
+        string textResponse = string.Empty;
+        try
+        {
+            if (_model.StreamingSupported && _streaming)
             {
-                { "max_tokens_to_sample", 300 }
+                bool firstChunk = true;
+
+                PromptItem outputPromptItem = new PromptItem(PromptItemType.FMAnswer, textResponse);
+                try
+                {
+                    await foreach (var chunk in InvokeModelWithStreamingAsync(prompt))
+                    {
+                        if (firstChunk)
+                        {
+                            // now we can clear the PromptField and add the user prompt and the AI answer to the PromptItems collection to refresh the UI
+                            await promptField.Clear();
+                            promptItems.Add(newUserPrompt);
+                            promptItems.Add(outputPromptItem);
+                            firstChunk = false;
+                        }
+                        outputPromptItem.Prompt += chunk;
+                        StateHasChanged();
+                        await JS.InvokeVoidAsync("scrollToElement", "PromptId");
+                    }
+                }
+                catch(Exception e)
+                {
+                    Console.WriteLine(e);
+                }
+                isThinking = false;
             }
-        );
-
-        // now we can clear the PromptField and add the user prompt and the AI answer to the PromptItems collection to refresh the UI
-        await promptField.Clear();
-        promptItems.Add(newUserPrompt);
-        promptItems.Add(new PromptItem(PromptItemType.FMAnswer, response.GetResponse()));
-        isThinking = false;
-        StateHasChanged();
-        await JS.InvokeVoidAsync("scrollToElement", "PromptId");
-
+            else
+            {
+                textResponse = await InvokeModelAsync(prompt);
+                // now we can clear the PromptField and add the user prompt and the AI answer to the PromptItems collection to refresh the UI
+                await promptField.Clear();
+                promptItems.Add(newUserPrompt);
+                promptItems.Add(new PromptItem(PromptItemType.FMAnswer, textResponse));
+                isThinking = false;
+                StateHasChanged();
+                await JS.InvokeVoidAsync("scrollToElement", "PromptId");
+            }
+        }
+        catch (Exception)
+        {
+            StateHasChanged();
+        }
     }
+
+    #region MODEL_CONFIGURATION_EVENT_CALLBACK
+    private void OnSelectedModelChanged(Model model)
+    {
+        _model = model;
+    }
+
+    private void OnStreamingChanged(bool value)
+    {
+        _streaming = value;
+    }
+
+    private void OnMessagesAPIChanged(bool value)
+    {
+        _messagesAPI = value;
+    }
+
+    private void OnAddPromptFormat(string value)
+    {
+    }
+    #endregion
+
+    #region INVOKE_REGION
+    private async Task<string?> InvokeModelAsync(Prompt prompt)
+    {
+        IFoundationModelResponse? response = null;
+        StringBuilder textPromptBuilder = new StringBuilder();
+        if (_model is Model.TitanText)
+        {
+            foreach (var promptItem in prompt)
+            {
+                string role = promptItem.Type == PromptItemType.User ? "User" : "Bot";
+                textPromptBuilder.Append($"{role}: {promptItem.Prompt}\n\n");
+            }
+            textPromptBuilder.Append("Bot: ");
+            response = await BedrockRuntimeClient.InvokeTitanTextG1Async((Model.TitanText)_model, textPromptBuilder.ToString(), _modelConfigurator?.GetTitanTextGenerationConfig());
+        }
+        else if (_model is Model.Jurassic2)
+        {
+            foreach (var promptItem in prompt)
+            {
+                string role = promptItem.Type == PromptItemType.User ? "human" : "assistant";
+                textPromptBuilder.Append($"{role}: {promptItem.Prompt}\n\n");
+            }
+            textPromptBuilder.Append("assistant: ");
+            response = await BedrockRuntimeClient.InvokeJurassic2Async((Model.Jurassic2)_model, textPromptBuilder.ToString(), _modelConfigurator.GetJurassic2TextGenerationConfig());
+        }
+        else if (_model is Model.ClaudeTextCompletionSupport && !_messagesAPI)
+        {
+            foreach(var promptItem in prompt)
+            {
+                string role = promptItem.Type == PromptItemType.User ? "Human" : "Assistant";
+                textPromptBuilder.Append($"{role}: {promptItem.Prompt}\n\n");
+            }
+            textPromptBuilder.Append("Assistant: ");
+            response = await BedrockRuntimeClient.InvokeClaudeAsync((Model.Claude)_model, textPromptBuilder.ToString(), _modelConfigurator.GetClaudeTextGenerationConfig());
+        }
+        else if (_model is Model.Claude)
+        {
+            ClaudeMessagesConfig? claudeMessagesConfig = _modelConfigurator.GetClaudeMessagesConfig();
+            claudeMessagesConfig ??= new ClaudeMessagesConfig() { MaxTokens = 200, TopP=0.01f };
+            foreach(var promptItem in prompt)
+            {
+                string role = promptItem.Type == PromptItemType.User ? "user" : "assistant";
+                claudeMessagesConfig.Messages.Add(new ClaudeMessage() { Role = role, Content = new[] { new ClaudeTextContent() { Text = promptItem.Prompt } } });
+            }
+            ClaudeMessage message = claudeMessagesConfig.Messages.Last();
+            claudeMessagesConfig.Messages.Remove(message);
+            response = await BedrockRuntimeClient.InvokeClaudeMessagesAsync((Model.Claude)_model, message, claudeMessagesConfig);
+        }
+        else if (_model is Model.CommandText)
+        {
+            foreach (var promptItem in prompt)
+            {
+                string role = promptItem.Type == PromptItemType.User ? "human" : "assistant";
+                textPromptBuilder.Append($"{role}: {promptItem.Prompt}\n\n");
+            }
+            textPromptBuilder.Append("assistant: ");
+            response = await BedrockRuntimeClient.InvokeCommandV14Async((Model.CommandText)_model, textPromptBuilder.ToString(), _modelConfigurator.GetCommandTextGenerationConfig());
+        }
+        else if (_model is Model.Llama213BChatV1 || _model is Model.Llama270BChatV1)
+        {
+            foreach (var promptItem in prompt)
+            {
+                if (promptItem.Type == PromptItemType.User)
+                {
+                    textPromptBuilder.Append($"<s>\n[INST]\n{promptItem.Prompt}[/INST]\n");
+                }
+                else
+                {
+                    textPromptBuilder.Append($"{promptItem.Prompt}\n</s>");
+                }
+            }
+            response = await BedrockRuntimeClient.InvokeLlamaAsync((Model.Llama)_model, textPromptBuilder.ToString(), _modelConfigurator.GetLlamaTextGenerationConfig());
+        }
+        else if (_model is Model.Llama38BInstructV1 || _model is Model.Llama370BInstructV1)
+        {
+            textPromptBuilder.Append("<|begin_of_text|>");
+            foreach (var promptItem in prompt)
+            {
+                if (promptItem.Type == PromptItemType.User)
+                {
+                    textPromptBuilder.Append($"<|start_header_id|>user<|end_header_id|>{promptItem.Prompt}<|eot_id|>\n");
+                }
+                else
+                {
+                    textPromptBuilder.Append($"<|start_header_id|>assistant<|end_header_id|>{promptItem.Prompt}<|eot_id|>\n");
+                }
+            }
+            textPromptBuilder.Append("<|start_header_id|>assistant<|end_header_id|>");
+            response = await BedrockRuntimeClient.InvokeLlamaAsync((Model.Llama)_model, textPromptBuilder.ToString(), _modelConfigurator.GetLlamaTextGenerationConfig());
+        }
+        else if (_model is Model.Mistral)
+        {
+            foreach (var promptItem in prompt)
+            {
+                if (promptItem.Type == PromptItemType.User)
+                {
+                    textPromptBuilder.Append($"<s>\n[INST]\n{promptItem.Prompt}[/INST]\n");
+                }
+                else
+                {
+                    textPromptBuilder.Append($"{promptItem.Prompt}\n</s>");
+                }
+            }
+            response = await BedrockRuntimeClient.InvokeMistralAsync((Model.Mistral)_model, textPromptBuilder.ToString(), _modelConfigurator.GetMistralTextGenerationConfig());
+        }
+        return response?.GetResponse();
+    }
+
+    private async IAsyncEnumerable<string?> InvokeModelWithStreamingAsync(Prompt prompt)
+    {
+        StringBuilder textPromptBuilder = new StringBuilder();
+        if (_model is Model.TitanText)
+        {
+            foreach (var promptItem in prompt)
+            {
+                string role = promptItem.Type == PromptItemType.User ? "User" : "Bot";
+                textPromptBuilder.Append($"{role}: {promptItem.Prompt}\n\n");
+            }
+            textPromptBuilder.Append("Bot: ");
+            await foreach (var chunk in BedrockRuntimeClient.InvokeTitanTextG1WithResponseStreamAsync((Model.TitanText)_model, textPromptBuilder.ToString(), _modelConfigurator.GetTitanTextGenerationConfig()))
+            {
+                yield return chunk.GetResponse();
+            }
+        }
+        else if (_model is Model.ClaudeTextCompletionSupport && !_messagesAPI)
+        {
+            foreach (var promptItem in prompt)
+            {
+                string role = promptItem.Type == PromptItemType.User ? "Human" : "Assistant";
+                textPromptBuilder.Append($"{role}: {promptItem.Prompt}\n\n");
+            }
+            textPromptBuilder.Append("Assistant: ");
+            await foreach (var chunk in BedrockRuntimeClient.InvokeClaudeWithResponseStreamAsync((Model.Claude)_model, textPromptBuilder.ToString(), _modelConfigurator.GetClaudeTextGenerationConfig()))
+            {
+                yield return chunk.GetResponse();
+            }
+        }
+        else if (_model is Model.Claude)
+        {
+            ClaudeMessagesConfig? claudeMessagesConfig = _modelConfigurator.GetClaudeMessagesConfig();
+            claudeMessagesConfig ??= new ClaudeMessagesConfig() { MaxTokens = 200, TopP = 0.01f };
+            foreach (var promptItem in prompt)
+            {
+                string role = promptItem.Type == PromptItemType.User ? "user" : "assistant";
+                claudeMessagesConfig.Messages.Add(new ClaudeMessage() { Role = role, Content = new[] { new ClaudeTextContent() { Text = promptItem.Prompt } } });
+            }
+            ClaudeMessage message = claudeMessagesConfig.Messages.Last();
+            claudeMessagesConfig.Messages.Remove(message); await foreach (var chunk in BedrockRuntimeClient.InvokeClaudeMessagesWithResponseStreamAsync((Model.Claude)_model, message, claudeMessagesConfig))
+            {
+                yield return chunk.GetResponse();
+            }
+        }
+        else if (_model is Model.CommandText)
+        {
+            foreach (var promptItem in prompt)
+            {
+                string role = promptItem.Type == PromptItemType.User ? "human" : "assistant";
+                textPromptBuilder.Append($"{role}: {promptItem.Prompt}\n\n");
+            }
+            textPromptBuilder.Append("assistant: ");
+            await foreach (var chunk in BedrockRuntimeClient.InvokeCommandV14WithResponseStreamAsync((Model.CommandText)_model, textPromptBuilder.ToString(), _modelConfigurator.GetCommandTextGenerationConfig()))
+            {
+                yield return chunk.GetResponse();
+            }
+        }
+        else if (_model is Model.Llama213BChatV1 || _model is Model.Llama270BChatV1)
+        {
+            foreach (var promptItem in prompt)
+            {
+                if (promptItem.Type == PromptItemType.User)
+                {
+                    textPromptBuilder.Append($"<s>\n[INST]\n{promptItem.Prompt}[/INST]\n");
+                }
+                else
+                {
+                    textPromptBuilder.Append($"{promptItem.Prompt}\n</s>");
+                }
+            }
+            await foreach (var chunk in BedrockRuntimeClient.InvokeLlamaWithResponseStreamAsync((Model.Llama)_model, textPromptBuilder.ToString(), _modelConfigurator.GetLlamaTextGenerationConfig()))
+            {
+                yield return chunk.GetResponse();
+            }
+        }
+        else if (_model is Model.Llama)
+        {
+            textPromptBuilder.Append("<|begin_of_text|>");
+            foreach (var promptItem in prompt)
+            {
+                if (promptItem.Type == PromptItemType.User)
+                {
+                    textPromptBuilder.Append($"<|start_header_id|>user<|end_header_id|>{promptItem.Prompt}<|eot_id|>\n");
+                }
+                else
+                {
+                    textPromptBuilder.Append($"<|start_header_id|>assistant<|end_header_id|>{promptItem.Prompt}<|eot_id|>\n");
+                }
+            }
+            textPromptBuilder.Append("<|start_header_id|>assistant<|end_header_id|>");
+            await foreach (var chunk in BedrockRuntimeClient.InvokeLlamaWithResponseStreamAsync((Model.Llama)_model, textPromptBuilder.ToString(), _modelConfigurator.GetLlamaTextGenerationConfig()))
+            {
+                yield return chunk.GetResponse();
+            }
+        }
+        else if (_model is Model.Mistral)
+        {
+            foreach (var promptItem in prompt)
+            {
+                if (promptItem.Type == PromptItemType.User)
+                {
+                    textPromptBuilder.Append($"<s>\n[INST]\n{promptItem.Prompt}[/INST]\n");
+                }
+                else
+                {
+                    textPromptBuilder.Append($"{promptItem.Prompt}\n</s>");
+                }
+            }
+            await foreach (var chunk in BedrockRuntimeClient.InvokeMistralWithResponseStreamAsync((Model.Mistral)_model, textPromptBuilder.ToString(), _modelConfigurator.GetMistralTextGenerationConfig()))
+            {
+                yield return chunk.GetResponse();
+            }
+        }
+    }
+    #endregion
 }
