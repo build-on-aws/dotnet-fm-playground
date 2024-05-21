@@ -98,26 +98,19 @@
                 bool firstChunk = true;
 
                 PromptItem outputPromptItem = new PromptItem(PromptItemType.FMAnswer, textResponse);
-                try
+               await foreach (var chunk in InvokeModelWithStreamingAsync(prompt))
                 {
-                    await foreach (var chunk in InvokeModelWithStreamingAsync(prompt))
+                    if (firstChunk)
                     {
-                        if (firstChunk)
-                        {
-                            // now we can clear the PromptField and add the user prompt and the AI answer to the PromptItems collection to refresh the UI
-                            await promptField.Clear();
-                            promptItems.Add(newUserPrompt);
-                            promptItems.Add(outputPromptItem);
-                            firstChunk = false;
-                        }
-                        outputPromptItem.Prompt += chunk;
-                        StateHasChanged();
-                        await JS.InvokeVoidAsync("scrollToElement", "PromptId");
+                        // now we can clear the PromptField and add the user prompt and the AI answer to the PromptItems collection to refresh the UI
+                        await promptField.Clear();
+                        promptItems.Add(newUserPrompt);
+                        promptItems.Add(outputPromptItem);
+                        firstChunk = false;
                     }
-                }
-                catch(Exception e)
-                {
-                    Console.WriteLine(e);
+                    outputPromptItem.Prompt += chunk;
+                    StateHasChanged();
+                    await JS.InvokeVoidAsync("scrollToElement", "PromptId");
                 }
                 isThinking = false;
             }
@@ -133,8 +126,9 @@
                 await JS.InvokeVoidAsync("scrollToElement", "PromptId");
             }
         }
-        catch (Exception)
+        catch (Exception e )
         {
+            Console.WriteLine(e);
             StateHasChanged();
         }
     }
