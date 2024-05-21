@@ -35,7 +35,7 @@
         </MudCard>
         <EditForm @ref="editForm" Model="@userPrompt" OnSubmit="OnSubmit">
             <MudGrid Spacing="2" Justify="Justify.Center">
-                <MudItem xs="6" Class="d-flex">
+                <MudItem xs="@(enableTrace ? 6 : 12 )" Class="d-flex">
                     <MudCard Class="flex-auto" >
                         <MudCardContent>
 
@@ -77,7 +77,7 @@
                         </MudCardActions>
                     </MudCard>
                 </MudItem>
-                <MudItem xs="6">
+                <MudItem hidden="@(!enableTrace)" xs="6">
                     <MudCard>
                     <MudCardContent>
                         <MudTabs ApplyEffectsToContainer="true">
