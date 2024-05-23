@@ -75,9 +75,11 @@
 
     private InferenceParametersBase? _inferenceParametersBase = null;
 
+    [Parameter, EditorRequired] public required string OutputModality { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
-        _foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("TEXT") && Model.IsSupported(x.ModelId));
+        _foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains(OutputModality) && Model.IsSupported(x.ModelId));
         _selectedModel = _foundationModels.FirstOrDefault();
         await UpdateModel();
         await base.OnParametersSetAsync();

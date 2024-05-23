@@ -1,0 +1,94 @@
+﻿@page "/embedding-playground"
+@using System.Text;
+@using Amazon.BedrockRuntime;
+@using Amazon.Bedrock;
+@using Amazon.Bedrock.Model;
+@using Rockhead.Extensions;
+@using System.Text.Json;
+@using DotnetFMPlayground.Core.Models;
+@using Rockhead.Extensions.Amazon;
+@using Rockhead.Extensions.Anthropic;
+@using Rockhead.Extensions.AI21Labs;
+@using Rockhead.Extensions.Cohere;
+@using Rockhead.Extensions.Meta;
+@using Rockhead.Extensions.MistralAI;
+@using DotnetFMPlayground.App.Components;
+@inject AmazonBedrockRuntimeClient BedrockRuntimeClient;
+@inject AmazonBedrockClient BedrockClient;
+@inject IJSRuntime JS;
+
+<MudText Typo="Typo.h3">Embedding Playground</MudText>
+<MudStack>
+    <ModelConfigurator OutputModality="EMBEDDING" @ref="_modelConfigurator" OnModelChanged="OnSelectedModelChanged"></ModelConfigurator>
+    <EditForm Model="@userPrompt" OnSubmit="OnSubmit">
+        <MudCard>
+            <MudCardContent>
+                <MudTextField Counter=0 id="PromptId" Label="Prompt" @bind-Value="userPrompt.Prompt" Lines=5 Variant="Variant.Outlined" />
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="ml-auto">Submit</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </EditForm>
+    <MudCard>
+        <MudCardContent>
+            <MudField Id="ResponseField" Label="Response" Class="white-space-pre-line">@outputText</MudField>
+        </MudCardContent>
+    </MudCard>
+</MudStack>
+@code {
+
+    public class UserPrompt
+    {
+        public string Prompt { get; set; }
+    }
+
+    private ModelConfigurator _modelConfigurator;
+
+    private Model _model;
+
+    private UserPrompt userPrompt = new UserPrompt();
+
+    private string outputText;
+
+    private void OnSelectedModelChanged(Model model)
+    {
+        _model = model;
+        outputText = string.Empty;
+    }
+
+    private async Task OnSubmit(EditContext context)
+    {
+        outputText = string.Empty;
+        Prompt prompt = new();
+        prompt.Add(new PromptItem(PromptItemType.User, userPrompt.Prompt));
+
+        try
+        {
+            outputText = await InvokeModelAsync(prompt);
+            StateHasChanged();
+            await JS.InvokeVoidAsync("scrollToElement", "ResponseField");
+        }
+        catch (Exception e)
+        {
+            outputText = e.Message;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<string?> InvokeModelAsync(Prompt prompt)
+    {
+        IFoundationModelResponse? response = null;
+        string textPrompt = new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString();
+        if(_model is Model.TitanEmbedTextV1)
+        {
+            response = await BedrockRuntimeClient.InvokeTitanEmbeddingsG1TextAsync(textPrompt);
+        }
+        else if(_model is Model.Embed)
+        {
+            response = await BedrockRuntimeClient.InvokeEmbedV3Async((Model.Embed)_model, new []{ textPrompt });
+        }
+        return response?.GetResponse();
+    }
+}
+
