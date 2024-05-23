@@ -13,7 +13,7 @@
 
 <MudText Typo="Typo.h3">Chat Playground</MudText>
 <MudStack>
-    <ModelConfigurator @ref="_modelConfigurator" OnAddPromptFormat="OnAddPromptFormat" OnModelChanged="OnSelectedModelChanged" OnStreamingChanged="OnStreamingChanged" OnMessagesAPIChanged="OnMessagesAPIChanged"></ModelConfigurator>
+    <ModelConfigurator OutputModality="TEXT" @ref="_modelConfigurator" OnAddPromptFormat="OnAddPromptFormat" OnModelChanged="OnSelectedModelChanged" OnStreamingChanged="OnStreamingChanged" OnMessagesAPIChanged="OnMessagesAPIChanged"></ModelConfigurator>
     <MudCard>
         <MudCardContent>
             <MudTimeline Reverse=true>

@@ -19,7 +19,7 @@
 
 <MudText Typo="Typo.h3">Text Playground</MudText>
 <MudStack>
-    <ModelConfigurator @ref="_modelConfigurator" OnAddPromptFormat="OnAddPromptFormat" OnModelChanged="OnSelectedModelChanged" OnStreamingChanged="OnStreamingChanged" OnMessagesAPIChanged="OnMessagesAPIChanged"></ModelConfigurator>
+    <ModelConfigurator OutputModality="TEXT" @ref="_modelConfigurator" OnAddPromptFormat="OnAddPromptFormat" OnModelChanged="OnSelectedModelChanged" OnStreamingChanged="OnStreamingChanged" OnMessagesAPIChanged="OnMessagesAPIChanged"></ModelConfigurator>
     <EditForm Model="@userPrompt" OnSubmit="OnSubmit">
         <MudCard>
             <MudCardContent>
