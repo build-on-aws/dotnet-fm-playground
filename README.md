@@ -7,7 +7,7 @@ to build generative AI enabled applications.
 
 Amazon Bedrock is a fully managed 
 service that offers a choice of high-performing foundation models (FMs) 
-from leading AI companies like AI21 Labs, Anthropic, Cohere, Meta, Stability AI, 
+from leading AI companies like AI21 Labs, Anthropic, Cohere, Meta, Stability AI, Mistral AI
 and Amazon via a single API.
 
 It also offers Knowledge Bases and Agents for Amazon Bedrock to speed up the implementation of Retrieval Augmented Generation pattern and execute complex tasks.
@@ -16,7 +16,8 @@ In order to let you test and interact with the different foundation models and a
 * A text playground
 * A chat playground
 * A voice chat playground
-* An image playground
+* An embedding playground
+* An image playground 
 * An agent playground
 
 In addition, it also lists and displays the foundation models you have access to and their characteristics.
