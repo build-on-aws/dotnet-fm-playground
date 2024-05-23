@@ -3,6 +3,7 @@
 @using System.Text;
 @using Amazon.Bedrock;
 @using Amazon.BedrockRuntime;
+@using DotnetFMPlayground.App.Components
 @using Rockhead.Extensions;
 @using Rockhead.Extensions.Amazon;
 @using Rockhead.Extensions.StabilityAI;
@@ -13,20 +14,7 @@
 
 <MudText Typo="Typo.h3">Image Playground</MudText>
 <MudStack>
-<MudCard>
-    <MudCardContent>
-        <MudSelect T="FoundationModelSummary" @bind-Value="selectedModel" ToStringFunc="@selectConverter" Required="true">
-            @if (foundationModels != null)
-            {
-                foreach (var item in foundationModels)
-                {
-                    selectedModel ??= item;
-                    <MudSelectItem Value="@item"/>
-                }
-            }
-        </MudSelect>
-    </MudCardContent>
-</MudCard>
+<ModelConfigurator OutputModality="IMAGE" @ref="_modelConfigurator" OnModelChanged="OnSelectedModelChanged"></ModelConfigurator>
 <EditForm Model="@userPrompt" OnSubmit="OnSubmit">
     <MudCard>
         <MudCardContent>
@@ -51,23 +39,19 @@
         public string Prompt { get; set; }
     }
 
-    private IEnumerable<FoundationModelSummary> foundationModels;
-
-    private FoundationModelSummary selectedModel;
-
     private UserPrompt userPrompt = new UserPrompt();
 
-    Func<FoundationModelSummary, string> selectConverter = fms => fms == null ? "" : String.Concat(fms?.ModelName, " (", fms?.ModelId, ")");
+    private ModelConfigurator _modelConfigurator;
+
+    private Model _model;
+
+    private void OnSelectedModelChanged(Model model)
+    {
+        _model = model;
+        imageSrc = string.Empty;
+    }
 
     private string imageSrc = "";
-
-    protected override async Task OnInitializedAsync()
-    {
-        foundationModels = (await BedrockClient.ListFoundationModelsAsync(new ListFoundationModelsRequest())).ModelSummaries.Where(x => x.OutputModalities.Contains("IMAGE") && Model.IsSupported(x.ModelId));
-        selectedModel = foundationModels.FirstOrDefault();
-        await base.OnInitializedAsync();
-        StateHasChanged();
-    }
 
     private async Task OnSubmit(EditContext context)
     {
@@ -77,8 +61,7 @@
             new PromptItem(PromptItemType.User, userPrompt.Prompt)
         ];
 
-        Model model = Model.Parse(selectedModel.ModelId);
-        if(model is Model.TitanImageGeneratorV1)
+        if(_model is Model.TitanImageGeneratorV1)
         {
             var response = await BedrockRuntimeClient.InvokeTitanImageGeneratorG1ForTextToImageAsync(new TitanImageTextToImageParams()
             {
@@ -86,9 +69,9 @@
             });
             imageSrc = $"data:image/jpeg;base64,{(object)response?.Images?.FirstOrDefault()}";
         }
-        else if(model is Model.StableDiffusionXl)
+        else if(_model is Model.StableDiffusionXl)
         {
-            var response = await BedrockRuntimeClient.InvokeStableDiffusionXlForTextToImageAsync((Model.StableDiffusionXl)model, new StableDiffusionTextToImageParams()
+            var response = await BedrockRuntimeClient.InvokeStableDiffusionXlForTextToImageAsync((Model.StableDiffusionXl)_model, new StableDiffusionTextToImageParams()
                 {
                     TextPrompts = new StableDiffusionTextToImageParams.TextPrompt[] { new StableDiffusionTextToImageParams.TextPrompt() { Text = new StringBuilder().AppendJoin(' ', prompt.Select(x => x.Prompt)).ToString() } }
                 }); 
